@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Arpeggio Release Pipeline</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/" style="text-decoration:none;color:inherit"><span class="brand-mark">A</span> ARPEGGIO</a>
+    <nav class="nav" data-page="home"></nav>
+    <div class="spacer"></div>
+  </header>
+  <div class="hero-wrap" style="margin-top:6vh">
+    <h1 id="hello">Vehicle release pipeline</h1>
+    <p class="ink2">Dealers log their release plans; management sees every dealer rolled up into one live dashboard with sales forecasts.</p>
+    <div class="choices">
+      <a class="card choice" href="/sales">
+        <div class="ico">📝</div>
+        <h2>Sales entry</h2>
+        <p class="ink2">Add, update and track target releases, CS numbers, financing and status.</p>
+      </a>
+      <a class="card choice" href="/dashboard">
+        <div class="ico">📊</div>
+        <h2>Dashboard</h2>
+        <p class="ink2">Units sold, pipeline, cancellations, bank mix, GRM leaderboard and month-end projections.</p>
+      </a>
+      <a class="card choice" href="/references" data-admin hidden>
+        <div class="ico">🗂️</div>
+        <h2>Data references</h2>
+        <p class="ink2">Edit dealers, variants, units, colors, transactions, statuses and banks.</p>
+      </a>
+      <a class="card choice" href="/users" data-admin hidden>
+        <div class="ico">👥</div>
+        <h2>Users</h2>
+        <p class="ink2">Create accounts and choose what each person can see.</p>
+      </a>
+    </div>
+    <p class="muted" style="font-size:12px;margin-top:24px" id="storageNote"></p>
+  </div>
+  <script src="/common.js"></script>
+  <script>
+    initShell().then(me => {
+      $('#hello').textContent = `Hi ${(me.name || me.username).split(' ')[0]}`;
+      if (me.role === 'admin') $$('[data-admin]').forEach(el => el.hidden = false);
+      $('#storageNote').textContent = {
+        'google-sheets': 'Data is saved to your Google Sheet.',
+        'fake-sheet': 'Data is saved to a simulated sheet (test mode).',
+        'local': 'Data is saved on this computer only (local mode).',
+      }[me.storage];
+    });
+  </script>
+</body>
+</html>

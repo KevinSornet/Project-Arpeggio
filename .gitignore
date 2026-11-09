@@ -1,0 +1,9 @@
+arpeggio.db
+__pycache__/
+*.pyc
+.DS_Store
+.venv/
+.secret_key
+*.sheet.json
+service-account*.json
+.env

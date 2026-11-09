@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>User Accounts</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/" style="text-decoration:none;color:inherit"><span class="brand-mark">A</span> ARPEGGIO</a>
+    <nav class="nav" data-page="users"></nav>
+    <div class="spacer"></div>
+  </header>
+
+  <main>
+    <div class="card-head" style="margin-bottom:16px">
+      <div>
+        <h1>Users</h1>
+        <div class="muted">Who can sign in, and what they can see.</div>
+      </div>
+      <button class="primary" id="addBtn">+ Add user</button>
+    </div>
+
+    <div class="card" id="notice" hidden style="margin-bottom:16px;border-color:var(--accent)"></div>
+
+    <div class="grid g-3" id="roleCards" style="margin-bottom:16px"></div>
+
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Username</th><th>Name</th><th>Role</th><th>Dealer</th><th>Active</th><th>Created</th><th></th></tr></thead>
+        <tbody id="list"></tbody>
+      </table>
+    </div>
+  </main>
+
+  <dialog id="dlg">
+    <form id="form">
+      <h2 id="dlgTitle">Add user</h2>
+      <div class="form-grid" style="grid-template-columns:1fr 1fr">
+        <label>Username<input name="username" autocapitalize="none" autocomplete="off" required></label>
+        <label>Full name<input name="name" autocomplete="off"></label>
+        <label>Role<select name="role"></select></label>
+        <label>Dealer<select name="dealer"></select></label>
+        <label class="wide" style="grid-column:span 2" id="pwLabel">Password (8+ characters, share it with them privately)
+          <span style="display:flex;gap:8px"><input name="password" autocomplete="new-password" style="flex:1"><button type="button" id="genPw">Generate</button></span>
+        </label>
+      </div>
+      <div class="dialog-actions">
+        <button type="button" id="cancelBtn">Cancel</button>
+        <button class="primary" type="submit">Save</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script src="/common.js"></script>
+  <script src="/users.js"></script>
+</body>
+</html>

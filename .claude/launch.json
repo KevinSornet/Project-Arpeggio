@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "arpeggio",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": ["server.py", "--port", "8000"],
+      "port": 8000
+    },
+    {
+      "name": "arpeggio-sheet-sim",
+      "runtimeExecutable": "/bin/sh",
+      "runtimeArgs": ["-c", "ARPEGGIO_FAKE_SHEET=demo.sheet.json exec python3 server.py --port 8000"],
+      "port": 8000
+    }
+  ]
+}

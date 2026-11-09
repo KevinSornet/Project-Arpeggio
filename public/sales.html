@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sales Release Entry</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/" style="text-decoration:none;color:inherit"><span class="brand-mark">A</span> ARPEGGIO</a>
+    <nav class="nav" data-page="sales"></nav>
+    <div class="spacer"></div>
+    <label style="flex-direction:row;align-items:center;gap:8px">Dealer
+      <select id="branch"></select>
+    </label>
+  </header>
+
+  <main>
+    <div class="card-head" style="margin-bottom:16px">
+      <div>
+        <h1 id="title">Release pipeline</h1>
+        <div class="muted" id="subtitle"></div>
+      </div>
+      <button class="primary" id="addBtn">+ New release</button>
+    </div>
+
+    <div class="toolbar">
+      <label>Month <input type="month" id="month"></label>
+      <button id="allMonths" title="Show every month">All months</button>
+      <label style="flex:1;min-width:180px">Search
+        <input id="search" placeholder="Client, CS number, unit, GRM, remarks…">
+      </label>
+      <button id="clearFilters" hidden>Clear column filters</button>
+      <button id="importBtn" title="Import rows from a CSV export of your spreadsheet">Import CSV</button>
+      <input type="file" id="importFile" accept=".csv,text/csv" hidden>
+      <a class="btn" id="exportBtn" href="#" title="Exports the rows currently shown">Export CSV</a>
+    </div>
+
+    <div class="chips" id="chips"></div>
+
+    <div class="table-wrap" style="max-height:calc(100vh - 260px)">
+      <table>
+        <thead id="thead"></thead>
+        <tbody id="rows"></tbody>
+      </table>
+    </div>
+  </main>
+
+  <dialog id="dlg">
+    <form method="dialog" id="form">
+      <div class="card-head" style="margin:0"><h2 id="dlgTitle">New release</h2><span class="sub" id="dlgBranch"></span></div>
+      <div class="form-grid">
+        <label>Target release date<input type="date" name="target_date" required></label>
+        <label>Variant<select name="variant" required></select></label>
+        <label>Unit<select name="unit"></select></label>
+        <label>Color<select name="color"></select></label>
+        <label>CS number<input name="cs_number" placeholder="e.g. FL464B"></label>
+        <label>Transaction<select name="transaction_type"></select></label>
+        <label>Bank<select name="bank"><option value="">—</option></select></label>
+        <label class="two">Client<input name="client" required></label>
+        <label>GRM<input name="grm" list="grmList" autocomplete="off"></label>
+        <label class="two">Status<select name="status"></select></label>
+        <label class="wide">Remarks<textarea name="remarks" rows="2"></textarea></label>
+      </div>
+      <p class="muted" style="font-size:12px;margin:-4px 0 12px">Missing a unit, color or bank? Add it under <a href="/references">Data references</a>.</p>
+      <div class="dialog-actions">
+        <button type="button" class="danger" id="delBtn" style="margin-right:auto">Delete</button>
+        <button type="button" id="cancelBtn">Cancel</button>
+        <button type="submit" class="primary" value="save">Save</button>
+      </div>
+      <datalist id="grmList"></datalist>
+    </form>
+  </dialog>
+
+  <script src="/common.js"></script>
+  <script src="/sales.js"></script>
+</body>
+</html>

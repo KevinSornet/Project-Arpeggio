@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Release Dashboard</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/" style="text-decoration:none;color:inherit"><span class="brand-mark">A</span> ARPEGGIO</a>
+    <nav class="nav" data-page="dashboard"></nav>
+    <div class="spacer"></div>
+    <span class="muted" id="updated"></span>
+  </header>
+
+  <main>
+    <div class="toolbar">
+      <div class="seg" id="presets">
+        <button data-p="month">This month</button>
+        <button data-p="3m">Last 3 months</button>
+        <button data-p="ytd">Year to date</button>
+        <button data-p="12m">Last 12 months</button>
+        <button data-p="all">All time</button>
+      </div>
+      <label>From <input type="date" id="from"></label>
+      <label>To <input type="date" id="to"></label>
+      <label>Dealer <select id="branch"><option value="">All dealers</option></select></label>
+      <div class="spacer"></div>
+      <a class="btn" id="exportBtn" href="#">Export CSV</a>
+    </div>
+
+    <section class="grid g-kpi" id="kpis"></section>
+
+    <section class="grid g-3">
+      <div class="card span-2">
+        <div class="card-head">
+          <h2>Units sold per month &amp; forecast</h2>
+          <span class="sub">Solid = actual · dashed = forecast · band = likely range</span>
+        </div>
+        <div class="chart-box tall"><canvas id="cTrend"></canvas></div>
+      </div>
+      <div class="card">
+        <div class="card-head"><h2>Forecast detail</h2><span class="sub">units</span></div>
+        <table id="tForecast"></table>
+        <p class="muted" style="font-size:12px;margin:12px 0 0" id="forecastNote"></p>
+      </div>
+    </section>
+
+    <section class="grid g-3">
+      <div class="card">
+        <div class="card-head"><h2>Sold by dealer</h2><span class="sub">selected range</span></div>
+        <div class="chart-box"><canvas id="cBranch"></canvas></div>
+      </div>
+      <div class="card">
+        <div class="card-head"><h2>Sold by variant</h2><span class="sub">selected range</span></div>
+        <div class="chart-box"><canvas id="cVariant"></canvas></div>
+      </div>
+      <div class="card">
+        <div class="card-head"><h2>Planned releases, next 8 weeks</h2><span class="sub">open deals by week</span></div>
+        <div class="chart-box"><canvas id="cWeekly"></canvas></div>
+      </div>
+    </section>
+
+    <section class="grid g-3">
+      <div class="card">
+        <div class="card-head"><h2>Transaction mix</h2><span class="sub">units sold</span></div>
+        <div class="chart-box" style="height:180px"><canvas id="cTxn"></canvas></div>
+        <div class="card-head" style="margin:16px 0 8px"><h2>Close rate by transaction</h2></div>
+        <table id="tClose"></table>
+      </div>
+      <div class="card">
+        <div class="card-head"><h2>Top financing banks</h2><span class="sub">financing + bank PO sold</span></div>
+        <div class="chart-box"><canvas id="cBank"></canvas></div>
+      </div>
+      <div class="card">
+        <div class="card-head"><h2>Next month by variant</h2><span class="sub" id="vfSub"></span></div>
+        <table id="tVariantFc"></table>
+      </div>
+    </section>
+
+    <section class="grid g-2">
+      <div class="card">
+        <div class="card-head"><h2>Dealer performance</h2><span class="sub">selected range</span></div>
+        <div style="overflow:auto"><table id="tBranch"></table></div>
+      </div>
+      <div class="card">
+        <div class="card-head"><h2>GRM leaderboard</h2><span class="sub">selected range</span></div>
+        <div style="overflow:auto"><table id="tGrm"></table></div>
+      </div>
+    </section>
+
+    <section class="card" style="margin-bottom:16px">
+      <div class="card-head"><h2>Upcoming releases — next 14 days</h2><span class="sub" id="upSub"></span></div>
+      <div style="overflow:auto;max-height:420px"><table id="tUpcoming"></table></div>
+    </section>
+  </main>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+  <script src="/common.js"></script>
+  <script src="/dashboard.js"></script>
+</body>
+</html>

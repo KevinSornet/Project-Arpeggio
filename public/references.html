@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Data References</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/" style="text-decoration:none;color:inherit"><span class="brand-mark">A</span> ARPEGGIO</a>
+    <nav class="nav" data-page="references"></nav>
+    <div class="spacer"></div>
+  </header>
+
+  <main>
+    <div style="margin-bottom:16px">
+      <h1>Data references</h1>
+      <div class="muted">The lists behind every dropdown. Add, rename, reorder or remove items; renames update existing releases too.</div>
+    </div>
+
+    <div class="ref-layout">
+      <nav class="ref-tabs" id="tabs" aria-label="Reference lists"></nav>
+
+      <section class="card">
+        <div class="card-head">
+          <div>
+            <h2 id="kindTitle"></h2>
+            <div class="sub" id="kindHelp"></div>
+          </div>
+          <label id="variantFilterWrap" hidden>Show units for
+            <select id="variantFilter"></select>
+          </label>
+        </div>
+
+        <form id="addForm" class="toolbar" style="margin-bottom:12px">
+          <label style="flex:1;min-width:220px">Add new <span class="muted" style="font-weight:400">(paste several, one per line)</span>
+            <textarea name="name" rows="1" placeholder="Type a name…" required></textarea>
+          </label>
+          <label id="addParentWrap" hidden>Variant<select name="parent"></select></label>
+          <label id="addCategoryWrap" hidden>Category<select name="category"></select></label>
+          <button class="primary" type="submit">Add</button>
+        </form>
+
+        <div class="table-wrap">
+          <table>
+            <thead id="thead"></thead>
+            <tbody id="list"></tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <script src="/common.js"></script>
+  <script src="/references.js"></script>
+</body>
+</html>
