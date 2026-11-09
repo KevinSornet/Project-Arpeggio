@@ -5,5 +5,5 @@
 //         Leave it empty ('') to run in DEMO MODE: the site then works on its own with fake data
 //         kept in each visitor's browser, which is handy for trying things out.
 window.ARPEGGIO_CONFIG = {
-  apiUrl: 'https://script.google.com/macros/s/AKfycbx4cCCIrFoJIkKf2eIWY37Vazp7xRs_j3LkCjTq_mgDSK9_VevCKjMmL7vbRAe4Qn0h/exec',
+  apiUrl: 'https://script.google.com/macros/s/AKfycbxzF5loh3hQALs2RVNjPGe2u4S4Mw6rlUpMRLv8J_tcowgplUpWGiyPImOcgpXYeX5k/exec',
 };
