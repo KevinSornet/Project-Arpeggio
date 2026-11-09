@@ -5,8 +5,18 @@ const form = $('#form');
 
 const opt = (v, l = v, sel = false) => `<option value="${esc(v)}" ${sel ? 'selected' : ''}>${esc(l)}</option>`;
 
-async function load() {
-  data = await api.call('users');
+const SPEC = { users: true };
+function load() {
+  return loadPage(SPEC, d => { data = d.users; render(); });
+}
+function putUser(u, remove = false) {
+  const apply = list => {
+    const i = list.findIndex(x => x.id === u.id);
+    if (remove) { if (i >= 0) list.splice(i, 1); }
+    else if (i >= 0) list[i] = u; else list.push(u);
+  };
+  apply(data.users);
+  updateCache(SPEC, c => apply(c.users.users));
   render();
 }
 
@@ -77,8 +87,13 @@ form.addEventListener('submit', async e => {
   const body = { name: form.name.value, role: form.role.value, dealer: form.dealer.value };
   if (form.password.value) body.password = form.password.value;
   try {
-    if (editing) await api.call('updateUser', { id: editing.id, changes: body });
-    else await api.call('createUser', { user: { ...body, username: form.username.value } });
+    const btn = form.querySelector('button[type=submit]');
+    btn.disabled = true;
+    let saved;
+    try {
+      saved = editing ? await api.call('updateUser', { id: editing.id, changes: body })
+        : await api.call('createUser', { user: { ...body, username: form.username.value } });
+    } finally { btn.disabled = false; }
     const pw = form.password.value, who = editing ? editing.username : form.username.value.trim().toLowerCase();
     $('#dlg').close();
     if (pw) {
@@ -90,7 +105,7 @@ form.addEventListener('submit', async e => {
       $('#copyPw').onclick = () => navigator.clipboard.writeText(pw).then(() => toast('Copied'), () => toast('Select and copy it manually'));
       $('#hideNotice').onclick = () => { $('#notice').hidden = true; $('#notice').innerHTML = ''; };
     } else toast('Saved');
-    load();
+    putUser(saved);
   } catch (err) { toast(err.message); }
 });
 
@@ -101,17 +116,16 @@ $('#list').addEventListener('click', async e => {
   try {
     if (e.target.closest('.edit')) openDialog(u);
     if (e.target.closest('.toggle')) {
-      await api.call('updateUser', { id: u.id, changes: { active: u.active ? 0 : 1 } });
+      putUser(await api.call('updateUser', { id: u.id, changes: { active: u.active ? 0 : 1 } }));
       toast(u.active ? `${u.username} can no longer sign in` : `${u.username} re-enabled`);
-      load();
     }
     if (e.target.closest('.del')) {
       if (!confirm(`Delete ${u.username}? Their past changes keep their username.`)) return;
       await api.call('deleteUser', { id: u.id });
+      putUser(u, true);
       toast('User deleted');
-      load();
     }
   } catch (err) { toast(err.message); }
 });
 
-initShell().then(load).catch(err => toast(err.message));
+load().catch(err => toast(err.message));

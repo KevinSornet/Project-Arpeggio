@@ -328,6 +328,18 @@ var Arpeggio = (function () {
 
     switch (action) {
       // ---- me
+      case 'bootstrap': {
+        var sub = function (action, extra) {
+          var r = { token: req.token, action: action };
+          Object.keys(extra || {}).forEach(function (k) { r[k] = extra[k]; });
+          return route(r, env);
+        };
+        var res = { me: sub('me'), meta: sub('meta') };
+        if (req.releases) res.releases = sub('releases', req.releases);
+        if (req.refs) res.refs = sub('refs');
+        if (req.users) res.users = sub('users');
+        return res;
+      }
       case 'me':
         var me = publicUser(user); me.roles = ROLES; me.storage = env.mode; return me;
       case 'changePassword': {
@@ -431,8 +443,9 @@ var Arpeggio = (function () {
           }
         });
         added.forEach(function (c) { addRef(db, 'dealer', c.branch); });
-        db.insertMany('releases', added);
-        return { added: added.length, errors: errors.slice(0, 20), error_count: errors.length };
+        var newIds = db.insertMany('releases', added);
+        return { added: added.length, errors: errors.slice(0, 20), error_count: errors.length,
+          rows: newIds.map(function (id) { return db.get('releases', id); }) };
       }
 
       // ---- reference lists (admin)

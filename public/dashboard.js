@@ -16,6 +16,11 @@ function rangeFor(p) {
 }
 
 function applyPreset(p) {
+  if (!today) { // data not here yet: remember the choice, onData applies it
+    preset = p;
+    $$('#presets button').forEach(b => b.classList.toggle('on', b.dataset.p === p));
+    return;
+  }
   preset = p;
   store.set('arpeggio.preset', p);
   const [f, t] = rangeFor(p);
@@ -182,10 +187,13 @@ function render(s) {
   $('#updated').textContent = `Updated ${new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`;
 }
 
-// Data is fetched once (and refreshed every minute); changing filters just recalculates here.
+// Data comes in ONE request (shared with the Sales page and remembered between visits),
+// refreshes every minute, and every filter change recalculates right here.
+const SPEC = { releases: {} };
 let lastStats = null;
 let allRows = [];
 let meta = null;
+let controlsReady = false;
 
 function filters() {
   return { from: $('#from').value, to: $('#to').value, branch: $('#branch').value };
@@ -197,12 +205,24 @@ function load() {
   render(lastStats);
 }
 
-async function fetchData() {
-  try {
-    const [m, rows] = await Promise.all([api.call('meta'), api.call('releases')]);
-    meta = m; allRows = rows; today = m.today;
+function onData(d) {
+  meta = d.meta;
+  today = meta.today;
+  allRows = d.releases;
+  const cur = $('#branch').value || store.get('arpeggio.dashBranch', '');
+  if (me.role === 'dealer') {
+    $('#branch').innerHTML = `<option>${esc(me.dealer)}</option>`;
+    $('#branch').disabled = true;
+  } else {
+    $('#branch').innerHTML = '<option value="">All dealers</option>' + meta.branches.map(b => `<option>${esc(b)}</option>`).join('');
+    if (meta.branches.includes(cur)) $('#branch').value = cur;
+  }
+  if (!controlsReady) {
+    controlsReady = true;
+    applyPreset(preset); // sets the date range, then draws
+  } else {
     load();
-  } catch (err) { toast(err.message); }
+  }
 }
 
 $('#exportBtn').addEventListener('click', e => {
@@ -212,24 +232,15 @@ $('#exportBtn').addEventListener('click', e => {
   download(`releases${f.branch ? ' ' + f.branch : ''}${f.from ? ' ' + f.from : ''}${f.to ? ' to ' + f.to : ''}.csv`, toCsv(rows));
 });
 
-async function init() {
-  await initShell();
-  meta = await api.call('meta');
-  today = meta.today;
-  $('#branch').innerHTML = '<option value="">All dealers</option>' + meta.branches.map(b => `<option>${esc(b)}</option>`).join('');
-  $('#branch').value = store.get('arpeggio.dashBranch', '');
-  if (me.role === 'dealer') { $('#branch').innerHTML = `<option>${esc(me.dealer)}</option>`; $('#branch').disabled = true; }
-  $$('#presets button').forEach(b => b.onclick = () => applyPreset(b.dataset.p));
-  ['#from', '#to'].forEach(sel => $(sel).addEventListener('change', () => {
-    $$('#presets button').forEach(b => b.classList.remove('on'));
-    load();
-  }));
-  $('#branch').addEventListener('change', () => { store.set('arpeggio.dashBranch', $('#branch').value); load(); });
-  meta = null;            // applyPreset sets the dates; draw once the rows arrive
-  applyPreset(preset);
-  await fetchData();
-  setInterval(fetchData, 60_000); // live: pick up new dealer entries every minute
-  matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => lastStats && render(lastStats));
-}
+$$('#presets button').forEach(b => b.onclick = () => applyPreset(b.dataset.p));
+['#from', '#to'].forEach(sel => $(sel).addEventListener('change', () => {
+  $$('#presets button').forEach(b => b.classList.remove('on'));
+  load();
+}));
+$('#branch').addEventListener('change', () => { store.set('arpeggio.dashBranch', $('#branch').value); load(); });
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => lastStats && render(lastStats));
 
-init().catch(err => toast(err.message));
+loadPage(SPEC, onData).then(() => {
+  // live: pick up new dealer entries every minute (one request each time)
+  setInterval(() => loadPage(SPEC, onData).catch(() => {}), 60_000);
+}).catch(err => toast(err.message));

@@ -1,6 +1,11 @@
 // Sales side: dealers enter and maintain their release plans.
+// All releases this user may see are loaded once (one request, shared with the Dashboard);
+// dealer / month / search / column filters then all run here in the browser, instantly.
+const SPEC = { releases: {} };
 let meta = null;
-let rows = [];        // rows loaded for dealer + month + search
+let pendingMeta = null; // fresh lists that arrived while the release form was open
+let allRows = [];     // every release this user may see
+let rows = [];        // rows for the chosen dealer + month + search
 let shown = [];       // rows after column filters + sort
 let editing = null;
 const filters = {};   // column key -> value
@@ -31,8 +36,11 @@ const catOf = s => (meta.statuses.find(x => x.name === s)?.category) || 'open';
 const needsBank = t => meta.transactions.find(x => x.name === t)?.category === 'bank';
 const cellText = (c, r) => (c.fmt ? c.fmt(r) : r[c.key]) || '';
 
-async function loadMeta() {
-  meta = await api.call('meta');
+function applyMeta(m) {
+  // Never rebuild the form's dropdowns while someone is filling it in: that would reset their choices.
+  if (dlg.open && meta) { pendingMeta = m; return; }
+  pendingMeta = null;
+  meta = m;
   const saved = branchSel.value || store.get('arpeggio.branch', '');
   branchSel.innerHTML = meta.branches.map(b => opt(b)).join('');
   if (meta.branches.includes(saved)) branchSel.value = saved;
@@ -44,18 +52,17 @@ async function loadMeta() {
   if (!monthInput.value && store.get('arpeggio.allMonths', '') !== '1') monthInput.value = meta.today.slice(0, 7);
 }
 
-function serverQuery() {
-  const p = { branch: branchSel.value };
-  if (monthInput.value) {
-    const [y, m] = monthInput.value.split('-').map(Number);
-    p.from = `${monthInput.value}-01`;
-    p.to = `${monthInput.value}-${String(new Date(y, m, 0).getDate()).padStart(2, '0')}`;
-  }
-  if ($('#search').value.trim()) p.q = $('#search').value.trim();
-  return p;
+dlg.addEventListener('close', () => { if (pendingMeta) { applyMeta(pendingMeta); render(); } });
+
+function viewRows() {
+  const branch = branchSel.value, month = monthInput.value;
+  const q = $('#search').value.trim().toLowerCase();
+  return allRows.filter(r => r.branch === branch
+    && (!month || r.target_date.slice(0, 7) === month)
+    && (!q || [r.client, r.cs_number, r.unit, r.grm, r.variant, r.remarks].join(' ').toLowerCase().includes(q)));
 }
 
-async function load() {
+function load() {
   if (!branchSel.value) {
     $('#rows').innerHTML = `<tr><td colspan="12" class="empty">Add your dealer under <a href="references.html">Data references</a> to get started.</td></tr>`;
     return;
@@ -63,8 +70,19 @@ async function load() {
   store.set('arpeggio.branch', branchSel.value);
   $('#title').textContent = `${branchSel.value} release pipeline`;
   $('#subtitle').textContent = monthInput.value ? fmtDate(monthInput.value + '-01', { month: 'long', year: 'numeric' }) : 'All months';
-  rows = await api.call('releases', serverQuery());
+  rows = viewRows();
   render();
+}
+
+/** Put a saved/changed release into the page (and the saved copy) without reloading everything. */
+function upsertRow(row) {
+  const put = list => { const i = list.findIndex(r => r.id === row.id); i >= 0 ? (list[i] = row) : list.push(row); };
+  put(allRows);
+  updateCache(SPEC, c => put(c.releases));
+}
+function removeRow(id) {
+  allRows = allRows.filter(r => r.id !== id);
+  updateCache(SPEC, c => { c.releases = c.releases.filter(r => r.id !== id); });
 }
 
 function applyFilters() {
@@ -108,8 +126,17 @@ function renderHead() {
 }
 
 function render() {
+  if (!meta) return;
+  const active = document.activeElement;
+  const focusKey = active?.closest?.('#thead') && active.dataset.filter;
+  const caret = focusKey && active.selectionStart;
   applyFilters();
   renderHead();
+  if (focusKey) {
+    const el = $(`#thead [data-filter="${focusKey}"]`);
+    el?.focus();
+    if (el?.setSelectionRange && caret != null) el.setSelectionRange(caret, caret);
+  }
 
   const counts = {};
   shown.forEach(r => { counts[r.status] = (counts[r.status] || 0) + 1; });
@@ -208,20 +235,27 @@ form.addEventListener('submit', async e => {
   try {
     const btn = form.querySelector('button[type=submit]');
     btn.disabled = true; btn.textContent = 'Saving…';
+    let saved;
     try {
-      if (editing) await api.call('updateRelease', { id: editing.id, changes: body });
-      else await api.call('createRelease', { release: body });
+      saved = editing ? await api.call('updateRelease', { id: editing.id, changes: body })
+        : await api.call('createRelease', { release: body });
     } finally { btn.disabled = false; btn.textContent = 'Save'; }
+    upsertRow(saved);
     dlg.close();
     toast(editing ? 'Release updated' : 'Release added');
-    meta = await api.call('meta'); // refresh GRM list
     load();
-  } catch (err) { toast(err.message); }
+  } catch (err) { toast('Not saved: ' + err.message); } // the form stays open with everything typed
 });
 
 $('#delBtn').onclick = async () => {
   if (!editing || !confirm(`Delete the release for ${editing.client || 'this client'}?`)) return;
-  await api.call('deleteRelease', { id: editing.id });
+  const btn = $('#delBtn');
+  btn.disabled = true;
+  try {
+    await api.call('deleteRelease', { id: editing.id });
+  } catch (err) { toast('Not deleted: ' + err.message); return; }
+  finally { btn.disabled = false; }
+  removeRow(editing.id);
   dlg.close();
   toast('Release deleted');
   load();
@@ -233,13 +267,20 @@ $('#rows').addEventListener('click', e => {
 });
 $('#rows').addEventListener('change', async e => {
   if (!e.target.classList.contains('status-select')) return;
-  const id = e.target.closest('tr').dataset.id;
+  const id = +e.target.closest('tr').dataset.id;
+  const before = allRows.find(r => r.id === id);
+  const status = e.target.value;
+  if (!before || before._saving) { load(); return; } // one change at a time per row
+  allRows = allRows.map(r => r.id === id ? { ...r, status, _saving: true } : r);
+  load();
   try {
-    e.target.disabled = true;
-    await api.call('updateRelease', { id: +id, changes: { status: e.target.value } });
-    toast(`Status set to ${e.target.value}`);
-    load();
-  } catch (err) { toast(err.message); }
+    upsertRow(await api.call('updateRelease', { id, changes: { status } }));
+    toast(`Status set to ${status}`);
+  } catch (err) {
+    upsertRow(before); // put it back the way it was
+    toast(`Status not saved (${err.message}). It's back to ${before.status}.`);
+  }
+  load();
 });
 
 $('#addBtn').onclick = () => branchSel.value ? openDialog() : toast('Add a dealer under Data references first');
@@ -305,8 +346,8 @@ $('#importFile').onchange = async e => {
     const res = await api.call('importReleases', { rows: parsed, branch: branchSel.value });
     toast(`Imported ${res.added} rows${res.error_count ? `, ${res.error_count} skipped` : ''}`);
     if (res.errors.length) console.warn('Import issues:', res.errors);
-    await loadMeta();
-    load();
+    if (res.rows) { res.rows.forEach(upsertRow); load(); }
+    else await loadPage(SPEC, onData); // older server: reload everything
   } catch (err) { toast(err.message); }
   e.target.value = '';
 };
@@ -317,6 +358,13 @@ let searchT;
 $('#search').addEventListener('input', () => { clearTimeout(searchT); searchT = setTimeout(load, 250); });
 branchSel.addEventListener('change', load);
 
-initShell()
-  .then(() => { if (me.role === 'dealer') branchSel.disabled = true; })
-  .then(loadMeta).then(load).catch(err => toast(err.message));
+function onData(d) {
+  applyMeta(d.meta);
+  if (me.role === 'dealer') branchSel.disabled = true;
+  // keep any change still being saved in this tab on screen
+  const saving = allRows.filter(r => r._saving);
+  allRows = d.releases.map(r => saving.find(x => x.id === r.id) || r);
+  load();
+}
+
+loadPage(SPEC, onData).catch(err => toast(err.message));

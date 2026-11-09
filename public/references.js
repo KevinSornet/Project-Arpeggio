@@ -24,9 +24,13 @@ let kind = store.get('arpeggio.refKind', 'dealer');
 
 const opts = (pairs, sel) => pairs.map(([v, l]) => `<option value="${esc(v)}" ${v === sel ? 'selected' : ''}>${esc(l)}</option>`).join('');
 
-async function load() {
-  data = await api.call('refs');
-  render();
+const SPEC = { refs: true };
+function setData(d) {
+  data = d;
+  updateCache(SPEC, c => { c.refs = d; });
+}
+function load() {
+  return loadPage(SPEC, d => { data = d.refs; render(); });
 }
 
 function items() {
@@ -78,7 +82,7 @@ function render() {
 
 async function save(id, patch, msg) {
   try {
-    data = await api.call('updateRef', { id: +id, changes: patch });
+    setData(await api.call('updateRef', { id: +id, changes: patch }));
     render();
     if (msg) toast(msg);
   } catch (err) { toast(err.message); render(); }
@@ -122,7 +126,7 @@ $('#list').addEventListener('click', async e => {
       if (n) msg += `\nIts ${n} ${data.kinds[CHILD[kind]]} entr${n === 1 ? 'y' : 'ies'} will be removed too.`;
     }
     if (!confirm(msg)) return;
-    data = await api.call('deleteRef', { id: it.id });
+    setData(await api.call('deleteRef', { id: it.id }));
     render();
     toast('Removed');
   }
@@ -135,7 +139,7 @@ $('#list').addEventListener('click', async e => {
     if (other == null) return;
     const a = full.indexOf(it.id), b = full.indexOf(other);
     [full[a], full[b]] = [full[b], full[a]];
-    data = await api.call('reorderRefs', { ids: full });
+    setData(await api.call('reorderRefs', { ids: full }));
     render();
   }
 });
@@ -147,7 +151,7 @@ $('#addForm').addEventListener('submit', async e => {
     const res = await api.call('addRefs', {
       kind, name: f.name.value, parent: f.parent.value, category: CAT_OPTIONS[kind] ? f.category.value : '',
     });
-    data = res;
+    setData(res);
     f.name.value = '';
     render();
     toast(`Added ${res.added}${res.skipped ? `, ${res.skipped} already existed` : ''}`);
@@ -162,10 +166,10 @@ $('#parentFilter').addEventListener('change', () => {
 });
 $('#grmImportBtn').onclick = async () => {
   try {
-    data = await api.call('importUsedGrms');
+    setData(await api.call('importUsedGrms'));
     render();
     toast(`Added ${data.added} GRM${data.added === 1 ? '' : 's'}, each linked to the dealer it was first used at`);
   } catch (err) { toast(err.message); }
 };
 
-initShell().then(load).catch(err => toast(err.message));
+load().catch(err => toast(err.message));

@@ -50,7 +50,7 @@ const api = {
       res = await r.json().catch(() => ({ error: 'Unexpected reply from the server', status: 502 }));
     }
     if (res && res.error) {
-      if (res.status === 401 && action !== 'login' && action !== 'changePassword') { setToken(''); return toLogin(); }
+      if (res.status === 401 && action !== 'login' && action !== 'changePassword') { clearCache(); setToken(''); return toLogin(); }
       throw new Error(res.error);
     }
     return res;
@@ -84,12 +84,81 @@ const PAGES = [
 const ROLE_LABEL = { admin: 'Admin', manager: 'Manager', dealer: 'Dealer staff' };
 let me = null;
 
-async function initShell() {
+// ---------- fast page loading
+// Every Apps Script request costs ~1.5 s, so each page asks for everything it needs in ONE request
+// ('bootstrap'), and shows what it had last time (saved in this browser) while that request runs.
+const CACHE_PREFIX = 'arpeggio.cache:';
+
+function cacheKey(spec) {
+  const uid = getToken().split('.')[0];
+  return `${CACHE_PREFIX}${API_URL || 'demo'}:${uid}:${JSON.stringify(spec)}`;
+}
+function readCache(spec) {
+  try { return JSON.parse(localStorage.getItem(cacheKey(spec)) || 'null'); } catch { return null; }
+}
+function writeCache(spec, data) {
+  try { localStorage.setItem(cacheKey(spec), JSON.stringify(data)); }
+  catch { clearCache(); } // storage full: forget old copies rather than fail
+}
+function clearCache() {
+  try { Object.keys(localStorage).filter(k => k.startsWith(CACHE_PREFIX)).forEach(k => localStorage.removeItem(k)); } catch {}
+}
+
+async function bootstrap(spec) {
+  try {
+    return await api.call('bootstrap', spec);
+  } catch (err) {
+    // the Apps Script hasn't been updated yet: fall back to separate requests
+    if (!/Unknown action/.test(err.message)) throw err;
+    const [meData, meta] = [await api.call('me'), await api.call('meta')];
+    const out = { me: meData, meta };
+    if (spec.releases) out.releases = await api.call('releases', spec.releases);
+    if (spec.refs) out.refs = await api.call('refs');
+    if (spec.users) out.users = await api.call('users');
+    return out;
+  }
+}
+
+/**
+ * Load a page's data: calls onData(saved copy, true) straight away if there is one, then
+ * onData(fresh data, false) when the server answers. Returns the fresh data.
+ */
+async function loadPage(spec, onData = () => {}) {
   if (!getToken()) return toLogin();
-  me = await api.call('me');
+  const cached = readCache(spec);
+  if (cached?.me) {
+    applyShell(cached.me);
+    try { onData(cached, true); } catch (e) { console.warn('Saved copy could not be shown', e); }
+  }
+  let fresh;
+  try {
+    fresh = await bootstrap(spec);
+  } catch (err) {
+    if (cached) { toast('Showing saved data. ' + err.message); return cached; }
+    throw err;
+  }
+  writeCache(spec, fresh);
+  applyShell(fresh.me);
+  onData(fresh, false);
+  return fresh;
+}
+
+/** Keep the saved copy in step after a change, so the next visit opens with it. */
+function updateCache(spec, fn) {
+  const c = readCache(spec);
+  if (c) { fn(c); writeCache(spec, c); }
+}
+
+async function initShell() {
+  const d = await loadPage({});
+  return d.me;
+}
+
+function applyShell(meData) {
+  me = meData;
   const nav = $('nav.nav[data-page]');
   const page = PAGES.find(p => p.key === nav?.dataset.page);
-  if (page?.admin && me.role !== 'admin') { location.href = 'sales.html'; return new Promise(() => {}); }
+  if (page?.admin && me.role !== 'admin') { location.href = 'sales.html'; return; }
   if (nav) {
     nav.innerHTML = PAGES.filter(p => !p.admin || me.role === 'admin').map(p =>
       `<a href="${p.href}" class="${p.key === nav.dataset.page ? 'active' : ''}">${p.label}</a>`).join('');
@@ -117,10 +186,10 @@ async function initShell() {
         </div>
         <div class="dialog-actions"><button type="button" id="pwCancel">Cancel</button><button class="primary">Save password</button></div>
       </form></dialog>`);
-    $('#logoutBtn').onclick = () => { setToken(''); location.href = 'login.html'; };
+    $('#logoutBtn').onclick = () => { clearCache(); setToken(''); location.href = 'login.html'; };
     if (DEMO) $('#demoResetBtn').onclick = async () => {
       if (!confirm('Throw away all demo changes and start over with fresh demo data?')) return;
-      (await demoBackend()).reset(); setToken(''); location.href = 'login.html';
+      (await demoBackend()).reset(); clearCache(); setToken(''); location.href = 'login.html';
     };
     $('#pwBtn').onclick = () => { $('#userMenu').open = false; $('#pwForm').reset(); $('#pwDlg').showModal(); };
     $('#pwCancel').onclick = () => $('#pwDlg').close();
