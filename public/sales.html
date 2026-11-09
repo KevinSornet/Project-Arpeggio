@@ -4,11 +4,11 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Sales Release Entry</title>
-  <link rel="stylesheet" href="/styles.css">
+  <link rel="stylesheet" href="styles.css">
 </head>
 <body>
   <header class="topbar">
-    <a class="brand" href="/" style="text-decoration:none;color:inherit"><span class="brand-mark">A</span> ARPEGGIO</a>
+    <a class="brand" href="index.html" style="text-decoration:none;color:inherit"><span class="brand-mark">A</span> ARPEGGIO</a>
     <nav class="nav" data-page="sales"></nav>
     <div class="spacer"></div>
     <label style="flex-direction:row;align-items:center;gap:8px">Dealer
@@ -63,7 +63,7 @@
         <label class="two">Status<select name="status"></select></label>
         <label class="wide">Remarks<textarea name="remarks" rows="2"></textarea></label>
       </div>
-      <p class="muted" style="font-size:12px;margin:-4px 0 12px">Missing a unit, color or bank? Add it under <a href="/references">Data references</a>.</p>
+      <p class="muted" style="font-size:12px;margin:-4px 0 12px">Missing a unit, color or bank? Add it under <a href="references.html">Data references</a>.</p>
       <div class="dialog-actions">
         <button type="button" class="danger" id="delBtn" style="margin-right:auto">Delete</button>
         <button type="button" id="cancelBtn">Cancel</button>
@@ -73,7 +73,8 @@
     </form>
   </dialog>
 
-  <script src="/common.js"></script>
-  <script src="/sales.js"></script>
+  <script src="config.js"></script>
+  <script src="common.js"></script>
+  <script src="sales.js"></script>
 </body>
 </html>

@@ -4,13 +4,7 @@
     {
       "name": "arpeggio",
       "runtimeExecutable": "python3",
-      "runtimeArgs": ["server.py", "--port", "8000"],
-      "port": 8000
-    },
-    {
-      "name": "arpeggio-sheet-sim",
-      "runtimeExecutable": "/bin/sh",
-      "runtimeArgs": ["-c", "ARPEGGIO_FAKE_SHEET=demo.sheet.json exec python3 server.py --port 8000"],
+      "runtimeArgs": ["-m", "http.server", "8000", "--directory", "public"],
       "port": 8000
     }
   ]

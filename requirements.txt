@@ -1,3 +1,0 @@
-# Only needed when storing data in Google Sheets (local mode needs nothing beyond Python).
-gspread==6.2.1
-google-auth==2.62.1

@@ -19,7 +19,7 @@ let kind = store.get('arpeggio.refKind', 'dealer');
 const opts = (pairs, sel) => pairs.map(([v, l]) => `<option value="${esc(v)}" ${v === sel ? 'selected' : ''}>${esc(l)}</option>`).join('');
 
 async function load() {
-  data = await api.get('/api/refs');
+  data = await api.call('refs');
   render();
 }
 
@@ -65,7 +65,7 @@ function render() {
 
 async function save(id, patch, msg) {
   try {
-    data = await api.send('PUT', `/api/refs/${id}`, patch);
+    data = await api.call('updateRef', { id: +id, changes: patch });
     render();
     if (msg) toast(msg);
   } catch (err) { toast(err.message); render(); }
@@ -109,7 +109,7 @@ $('#list').addEventListener('click', async e => {
       if (n) msg += `\nIts ${n} unit(s) will be removed from the Units list too.`;
     }
     if (!confirm(msg)) return;
-    data = await api.send('DELETE', `/api/refs/${it.id}`);
+    data = await api.call('deleteRef', { id: it.id });
     render();
     toast('Removed');
   }
@@ -122,7 +122,7 @@ $('#list').addEventListener('click', async e => {
     if (other == null) return;
     const a = full.indexOf(it.id), b = full.indexOf(other);
     [full[a], full[b]] = [full[b], full[a]];
-    data = await api.send('POST', '/api/refs/reorder', { ids: full });
+    data = await api.call('reorderRefs', { ids: full });
     render();
   }
 });
@@ -131,7 +131,7 @@ $('#addForm').addEventListener('submit', async e => {
   e.preventDefault();
   const f = e.target;
   try {
-    const res = await api.send('POST', '/api/refs', {
+    const res = await api.call('addRefs', {
       kind, name: f.name.value, parent: f.parent.value, category: CAT_OPTIONS[kind] ? f.category.value : '',
     });
     data = res;

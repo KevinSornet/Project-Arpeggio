@@ -1,9 +1,11 @@
-arpeggio.db
 __pycache__/
 *.pyc
 .DS_Store
-.venv/
+# leftovers from the old Python server (local only)
+arpeggio.db
 .secret_key
 *.sheet.json
+.venv/
+# never commit Google keys
 service-account*.json
 .env

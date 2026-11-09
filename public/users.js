@@ -6,7 +6,7 @@ const form = $('#form');
 const opt = (v, l = v, sel = false) => `<option value="${esc(v)}" ${sel ? 'selected' : ''}>${esc(l)}</option>`;
 
 async function load() {
-  data = await api.get('/api/users');
+  data = await api.call('users');
   render();
 }
 
@@ -77,8 +77,8 @@ form.addEventListener('submit', async e => {
   const body = { name: form.name.value, role: form.role.value, dealer: form.dealer.value };
   if (form.password.value) body.password = form.password.value;
   try {
-    if (editing) await api.send('PUT', `/api/users/${editing.id}`, body);
-    else await api.send('POST', '/api/users', { ...body, username: form.username.value });
+    if (editing) await api.call('updateUser', { id: editing.id, changes: body });
+    else await api.call('createUser', { user: { ...body, username: form.username.value } });
     const pw = form.password.value, who = editing ? editing.username : form.username.value.trim().toLowerCase();
     $('#dlg').close();
     if (pw) {
@@ -101,13 +101,13 @@ $('#list').addEventListener('click', async e => {
   try {
     if (e.target.closest('.edit')) openDialog(u);
     if (e.target.closest('.toggle')) {
-      await api.send('PUT', `/api/users/${u.id}`, { active: u.active ? 0 : 1 });
+      await api.call('updateUser', { id: u.id, changes: { active: u.active ? 0 : 1 } });
       toast(u.active ? `${u.username} can no longer sign in` : `${u.username} re-enabled`);
       load();
     }
     if (e.target.closest('.del')) {
       if (!confirm(`Delete ${u.username}? Their past changes keep their username.`)) return;
-      await api.send('DELETE', `/api/users/${u.id}`);
+      await api.call('deleteUser', { id: u.id });
       toast('User deleted');
       load();
     }

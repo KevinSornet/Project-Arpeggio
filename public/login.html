@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Sign In · Arpeggio</title>
-  <link rel="stylesheet" href="/styles.css">
+  <link rel="stylesheet" href="styles.css">
 </head>
 <body>
   <div class="login-wrap">
@@ -19,9 +19,15 @@
         <button class="primary" type="submit" style="justify-content:center">Sign in</button>
       </form>
       <p class="muted" style="font-size:12px;margin:16px 0 0">No account or forgot your password? Ask your Arpeggio admin.</p>
+      <div id="demoBox" hidden style="margin-top:18px;border-top:1px solid var(--border);padding-top:14px">
+        <div style="font-size:13px;font-weight:600">Demo mode</div>
+        <p class="muted" style="font-size:12px;margin:2px 0 8px">Fake data, kept only in this browser. Click an account to try it:</p>
+        <div id="demoAccounts" class="demo-accounts"></div>
+      </div>
     </div>
   </div>
-  <script src="/common.js"></script>
-  <script src="/login.js"></script>
+  <script src="config.js"></script>
+  <script src="common.js"></script>
+  <script src="login.js"></script>
 </body>
 </html>

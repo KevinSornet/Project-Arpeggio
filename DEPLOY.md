@@ -1,92 +1,107 @@
-# Putting Arpeggio online (Google Sheets + Render)
+# Putting Arpeggio online (GitHub Pages + Google Sheets)
 
-When you're done, your data lives in a Google Sheet you own, and the app runs at a public
-`https://…onrender.com` address where every dealer signs in with their own account.
+How it fits together:
 
-You need: a Google account, a GitHub account (this repo pushed to it, private is fine), and a
-free [Render](https://render.com) account. Plan for about 20 minutes.
+```
+ Browser ──► GitHub Pages (the website: public/)
+    │
+    └──────► Google Apps Script web app (checks logins & roles) ──► your Google Sheet (the data)
+```
+
+* **GitHub Pages** serves the pages. They're static files, free to host.
+* **Google Apps Script** is a small program that runs on Google's servers, attached to your sheet.
+  It's the only thing that can read or write the sheet, and it enforces who can see what.
+* **The Google Sheet** holds everything: **Releases**, **References** and **Users** tabs.
+
+All free. Allow about 20 minutes.
+
+> Until step 3 is done the site runs in **demo mode**: fake data stored in each visitor's own browser.
+> That's handy for trying it out, but nothing is shared between people.
 
 ---
 
-## 1. Create the Google Sheet
+## 1. Create the sheet and its script
 
-1. Go to [sheets.new](https://sheets.new) and name it something like **Arpeggio Data**.
-2. Copy its ID from the address bar. It's the long part between `/d/` and `/edit`:
-   `https://docs.google.com/spreadsheets/d/`**`1AbC…xyz`**`/edit`
+1. Go to [sheets.new](https://sheets.new) and name the sheet **Arpeggio Data**.
+2. In the sheet: **Extensions → Apps Script**. A script editor opens.
+3. In the editor's left panel you'll see `Code.gs`. Replace its contents with
+   [`apps-script/Code.gs`](apps-script/Code.gs) from this repo.
+4. Click **+** next to *Files* → **Script**, name it **Core** (it becomes `Core.gs`), and paste in the
+   contents of [`public/core.js`](public/core.js).
+5. Click **Save** (💾).
 
-Leave it empty. The app creates the **Releases**, **References** and **Users** tabs itself.
+## 2. Run the one-time setup
 
-## 2. Create a Google "service account" (the app's robot login)
+1. In the toolbar's function dropdown pick **setup**, then click **Run**.
+2. Google asks for permission the first time: **Review permissions** → pick your account →
+   **Advanced → Go to … (unsafe)** → **Allow**. ("Unsafe" just means Google hasn't reviewed *your own* script.)
+3. Open **Execution log** at the bottom. It shows:
+   `FIRST ADMIN ACCOUNT → username: admin   password: ……`
+   Copy that password. You'll change it after signing in.
 
-1. Open [console.cloud.google.com](https://console.cloud.google.com) and create a project, e.g. *arpeggio*.
-2. **APIs & Services → Library**, search **Google Sheets API**, click **Enable**.
-3. **APIs & Services → Credentials → Create credentials → Service account**. Name it `arpeggio`,
-   click **Done** (no roles needed).
-4. Open the new service account → **Keys → Add key → Create new key → JSON**. A `.json` file downloads.
-   Treat it like a password: don't email it or commit it to GitHub.
-5. Copy the service account's email (looks like `arpeggio@your-project.iam.gserviceaccount.com`).
+Your sheet now has **Releases**, **References** and **Users** tabs.
 
-## 3. Share the sheet with the service account
+## 3. Publish the script as a web app
 
-In the Google Sheet: **Share** → paste the service account email → **Editor** → untick "Notify" → **Share**.
+1. **Deploy → New deployment** → click the ⚙️ next to *Select type* → **Web app**.
+2. Set **Execute as: Me** and **Who has access: Anyone**.
+   ("Anyone" lets the website reach the script. The script still requires an Arpeggio sign-in for everything.)
+3. **Deploy**, then copy the **Web app URL**. It ends in `/exec`.
+4. In this repo, open [`public/config.js`](public/config.js) and paste it in:
+   ```js
+   window.ARPEGGIO_CONFIG = {
+     apiUrl: 'https://script.google.com/macros/s/AKfy…/exec',
+   };
+   ```
 
-## 4. (Optional) Try it from your Mac first
+## 4. Turn on GitHub Pages
 
-```bash
-python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
-```
+1. Commit and push to the `main` branch.
+2. On GitHub: **Settings → Pages → Build and deployment → Source: GitHub Actions**.
+3. The *Deploy to GitHub Pages* workflow runs (watch the **Actions** tab). When it's green, the site is at
+   `https://<your-username>.github.io/<repo-name>/`.
 
-```bash
-GOOGLE_SHEET_ID=PASTE_SHEET_ID GOOGLE_SERVICE_ACCOUNT_FILE=/path/to/key.json ARPEGGIO_ADMIN_PASSWORD=choose-a-password .venv/bin/python server.py
-```
+> On a free GitHub account, Pages only works for **public** repositories. That's fine here: the code holds no
+> secrets. The data lives in your private sheet, and the script URL is useless without a sign-in.
+> To keep the repo private you need GitHub Pro.
 
-Open http://127.0.0.1:8000, sign in as `admin`, and watch the tabs appear in your sheet.
+## 5. First sign-in
 
-## 5. Deploy on Render
-
-1. Push this repo to GitHub.
-2. In Render: **New → Blueprint** → connect your GitHub → pick this repo. It reads `render.yaml`.
-3. Fill in the three values it asks for:
-   | Setting | Value |
-   |---|---|
-   | `GOOGLE_SHEET_ID` | the ID from step 1 |
-   | `GOOGLE_SERVICE_ACCOUNT_JSON` | open the key `.json` file in a text editor and paste **all** of it |
-   | `ARPEGGIO_ADMIN_PASSWORD` | the password for the first `admin` login (8+ characters) |
-4. Click **Apply**. After a few minutes you get a URL like `https://arpeggio-xxxx.onrender.com`.
-
-## 6. First sign-in
-
-1. Open the URL and sign in as **admin** with the password from step 5.
-2. Click your name (top right) → **Change password** if you like.
-3. Go to **Users → + Add user** and create an account for each person:
+1. Open the site and sign in as **admin** with the password from step 2.
+2. Click your name (top right) → **Change password**.
+3. **Users → + Add user** for each person:
    * **Admin**: everything, including Users and Data references
    * **Manager**: all dealers' releases and the full dashboard
    * **Dealer staff**: only their own dealer's releases and dashboard
-4. Send each person their username and password privately. They can change it after signing in.
-5. To bring in your existing spreadsheet: **Sales entry → Import CSV** (export the old sheet as CSV first).
+4. To bring in the old spreadsheet: **Sales entry → Import CSV** (export the old sheet as CSV first).
 
 ---
 
+## Updating later
+
+* **Website changes** (anything in `public/`): push to `main`. Pages redeploys by itself.
+* **Changes to `core.js` or `Code.gs`**: paste the new contents into the script editor, then
+  **Deploy → Manage deployments → ✏️ Edit → Version: New version → Deploy**.
+  The URL stays the same. Update **Core.gs** whenever `public/core.js` changes, so the server and the
+  website agree.
+
 ## Good to know
 
-**Editing the Google Sheet directly is fine.** The app re-reads it every minute. Some rules keep things tidy:
-* Don't change the **ID** column or the header row. Add your own extra columns to the *right* only.
-* New rows can leave **ID** blank; the app fills it in.
-* Dates can be typed as `11/20/2026` or `2026-11-20`.
-* The **Users** tab holds scrambled (hashed) passwords. Only admins should create users, through the app.
+**Editing the sheet directly is fine.** The app reads it fresh on every request.
+* Don't change the **ID** column or the header names. Add your own columns anywhere; the app leaves them alone.
+* New rows can leave **ID** blank; the app fills it in. Dates can be `11/20/2026` or `2026-11-20`, and
+  values like `patrol` or `w/ payment` are matched to your lists.
+* The **Users** tab holds scrambled (hashed) passwords. Create users through the app, not by typing in the sheet.
 
-**Keep the sheet private.** Share it only with the service account and the people who manage the data.
-Dealers use the app, not the sheet.
+**Keep the sheet private.** Don't share it with dealers; they use the website.
 
-**Backups.** Google Sheets keeps every version: **File → Version history**. You can also download a copy
-any time (**File → Download → Excel**).
+**Locked out?** In the script editor, run **resetAdminPassword**. The new `admin` password appears in the
+Execution log.
 
-**Free plan limits.** Render's free plan sleeps after 15 idle minutes, so the first visit afterwards takes
-about 30–60 seconds. Upgrade the service to *Starter* (~$7/month) to keep it awake. Your data is safe either
-way, because it lives in the sheet.
+**Speed.** Each save takes about 1–3 seconds, because Google Apps Script isn't fast. Reading is quick, and the
+dashboard calculates in your browser, so filters are instant. Google's free limits are generous for a team of
+dealers (roughly 20,000 requests a day).
 
-**Speed.** Reads come from a copy kept in memory, so they're instant. Saves go to Google first, which takes
-about a second, and only show as saved once Google confirms. That suits dozens of people working at once.
-At many thousands of releases per month, consider a real database (Supabase/Postgres).
+**Backups.** **File → Version history** in the sheet keeps every past version.
 
-**Time zone.** "Today" uses Philippine time (`ARPEGGIO_TZ=Asia/Manila`).
+**Time zone.** "Today" uses Philippine time (`TIME_ZONE` at the top of `Code.gs`).

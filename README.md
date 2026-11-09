@@ -2,37 +2,40 @@
 
 A web app for dealer release pipelines. Everyone signs in; what they see depends on their role.
 
-| Side | URL | Who | What |
+| Page | File | Who | What |
 |---|---|---|---|
-| **Sales entry** | `/sales` | Dealer sales teams | Pick your dealer, add/edit release plans (target date, variant, unit, color, CS number, transaction, bank, client, GRM, status, remarks), change status inline, **filter and sort every column**, import CSV, export the filtered rows to CSV. |
-| **Data references** | `/references` | Admin | Edit the lists behind every dropdown: dealers, variants, units (linked to a variant), colors, transactions, statuses, banks. Add (paste many at once), rename, reorder, delete. Renames update existing releases. |
-| **Users** | `/users` | Admin | Create accounts: **Admin** (everything), **Manager** (all dealers), **Dealer staff** (own dealer only). |
-| **Dashboard** | `/dashboard` | Everyone (dealer staff see their own dealer) | Every dealer compiled live: units sold, open pipeline, cancellation rate, financed share, sales by branch/variant/bank, GRM leaderboard, next‑8‑weeks pipeline, upcoming releases, and **sales forecasts**. |
+| **Sales entry** | `sales.html` | Dealer sales teams | Pick your dealer, add/edit release plans (target date, variant, unit, color, CS number, transaction, bank, client, GRM, status, remarks), change status inline, **filter and sort every column**, import CSV, export the filtered rows to CSV. |
+| **Data references** | `references.html` | Admin | Edit the lists behind every dropdown: dealers, variants, units (linked to a variant), colors, transactions, statuses, banks. Add (paste many at once), rename, reorder, delete. Renames update existing releases. |
+| **Users** | `users.html` | Admin | Create accounts: **Admin** (everything), **Manager** (all dealers), **Dealer staff** (own dealer only). |
+| **Dashboard** | `dashboard.html` | Everyone (dealer staff see their own dealer) | Every dealer compiled live: units sold, open pipeline, cancellation rate, financed share, sales by branch/variant/bank, GRM leaderboard, next‑8‑weeks pipeline, upcoming releases, and **sales forecasts**. |
 
-## Where the data lives
+## How it's hosted
 
-* **Online: Google Sheets.** The sheet is the master copy, with **Releases**, **References** and **Users** tabs.
-  See **[DEPLOY.md](DEPLOY.md)** for step-by-step setup with Google Sheets + Render hosting.
-* **Local: a file.** With no Google settings, data goes to `arpeggio.db` on this computer (git-ignored),
-  which is handy for trying things out.
-
-## Run it locally
-
-Local mode needs only Python 3.9+:
-
-```bash
-python3 server.py         # http://127.0.0.1:8000
+```
+Browser ──► GitHub Pages (public/: the website)
+   └──────► Google Apps Script (apps-script/Code.gs + core.js: logins & roles) ──► Google Sheet (the data)
 ```
 
-The first start creates an `admin` account and prints its password in the terminal. Set
-`ARPEGGIO_ADMIN_PASSWORD` beforehand to choose it yourself.
+* **Website:** static files in [`public/`](public/), published to GitHub Pages by
+  [`.github/workflows/pages.yml`](.github/workflows/pages.yml) on every push to `main`.
+* **Server:** a Google Apps Script web app attached to the Google Sheet. [`public/core.js`](public/core.js)
+  holds all the rules (validation, roles, permissions). It's pasted into Apps Script as `Core.gs`.
+  [`apps-script/Code.gs`](apps-script/Code.gs) connects it to the sheet.
+* **Data:** the Google Sheet, with **Releases**, **References** and **Users** tabs.
+
+Setup steps: **[DEPLOY.md](DEPLOY.md)**.
+
+### Demo mode
+
+With no `apiUrl` in [`public/config.js`](public/config.js), the site runs the same `core.js` in the browser,
+on fake data saved in that browser only. Sign in with the demo accounts shown on the login page.
+To try it locally:
 
 ```bash
-python3 seed_demo.py      # optional: ~13 months of fake demo data (--reset wipes releases first)
+python3 -m http.server 8000 --directory public
 ```
 
-To test the Google Sheets sync without a Google account, set `ARPEGGIO_FAKE_SHEET=demo.sheet.json`.
-That simulates the spreadsheet in a JSON file.
+Then open http://localhost:8000.
 
 ## Statuses
 
@@ -63,13 +66,17 @@ a title row above the header is skipped, and rows without a branch go to the dea
 
 ## API
 
-`POST /api/login` · `POST /api/logout` · `GET /api/me` · `POST /api/me/password` · `GET/POST /api/users` · `PUT/DELETE /api/users/:id` · `GET /api/meta` · `GET/POST /api/refs` · `PUT/DELETE /api/refs/:id` · `POST /api/refs/reorder` · `GET/POST /api/releases` · `PUT/DELETE /api/releases/:id` · `GET /api/stats?from=&to=&branch=` ·
-`GET /api/export.csv` · `POST /api/import?branch=`
+The website sends `POST` requests to the Apps Script URL with a JSON body `{ action, token, ...params }`.
+Actions: `login`, `me`, `changePassword`, `meta`, `releases`, `createRelease`, `updateRelease`, `deleteRelease`,
+`importReleases`, `refs`, `addRefs`, `updateRef`, `deleteRef`, `reorderRefs`, `users`, `createUser`, `updateUser`,
+`deleteUser`. Errors come back as `{ error, status }`.
 
 ## Security notes
 
-* Passwords are stored hashed (PBKDF2-SHA256); sessions are signed, HttpOnly cookies that expire after 14 days
-  and end immediately when a password changes or an account is disabled.
-* 8 failed sign-ins from one address lock it out for 15 minutes.
-* Dealer staff are restricted on the server, not just hidden in the UI: they can't read, change, import or
-  export another dealer's releases.
+* Every permission check happens in Apps Script, not just in the page. Dealer staff can't read, change, import or
+  export another dealer's releases, even by calling the script directly.
+* Passwords are stored salted and hashed (iterated SHA-256). Sign-in tokens are signed with a secret kept in the
+  script's properties. They expire after 14 days, and stop working as soon as the password changes or the
+  account is disabled.
+* 8 failed sign-ins for a username lock it for 15 minutes.
+* Keep the Google Sheet private; only the script (running as you) needs access.

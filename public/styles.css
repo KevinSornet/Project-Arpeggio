@@ -217,3 +217,8 @@ th.sortable:hover { color: var(--ink); }
 .role-badge { font-size: 11px; font-weight: 650; padding: 2px 8px; border-radius: 999px; background: var(--surface-2); }
 .role-badge.admin { background: color-mix(in srgb, var(--accent) 18%, transparent); }
 tr.inactive td { opacity: .5; }
+
+/* demo mode */
+.demo-pill { background: color-mix(in srgb, var(--warning) 30%, transparent); font-size: 11px; padding: 1px 8px; }
+.demo-accounts { display: flex; flex-direction: column; gap: 6px; }
+.demo-acct { justify-content: space-between; font-weight: 500; }

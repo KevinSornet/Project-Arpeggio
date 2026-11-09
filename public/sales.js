@@ -32,7 +32,7 @@ const needsBank = t => meta.transactions.find(x => x.name === t)?.category === '
 const cellText = (c, r) => (c.fmt ? c.fmt(r) : r[c.key]) || '';
 
 async function loadMeta() {
-  meta = await api.get('/api/meta');
+  meta = await api.call('meta');
   const saved = branchSel.value || store.get('arpeggio.branch', '');
   branchSel.innerHTML = meta.branches.map(b => opt(b)).join('');
   if (meta.branches.includes(saved)) branchSel.value = saved;
@@ -45,25 +45,25 @@ async function loadMeta() {
 }
 
 function serverQuery() {
-  const p = new URLSearchParams({ branch: branchSel.value });
+  const p = { branch: branchSel.value };
   if (monthInput.value) {
     const [y, m] = monthInput.value.split('-').map(Number);
-    p.set('from', `${monthInput.value}-01`);
-    p.set('to', `${monthInput.value}-${String(new Date(y, m, 0).getDate()).padStart(2, '0')}`);
+    p.from = `${monthInput.value}-01`;
+    p.to = `${monthInput.value}-${String(new Date(y, m, 0).getDate()).padStart(2, '0')}`;
   }
-  if ($('#search').value.trim()) p.set('q', $('#search').value.trim());
+  if ($('#search').value.trim()) p.q = $('#search').value.trim();
   return p;
 }
 
 async function load() {
   if (!branchSel.value) {
-    $('#rows').innerHTML = `<tr><td colspan="12" class="empty">Add your dealer under <a href="/references">Data references</a> to get started.</td></tr>`;
+    $('#rows').innerHTML = `<tr><td colspan="12" class="empty">Add your dealer under <a href="references.html">Data references</a> to get started.</td></tr>`;
     return;
   }
   store.set('arpeggio.branch', branchSel.value);
   $('#title').textContent = `${branchSel.value} release pipeline`;
   $('#subtitle').textContent = monthInput.value ? fmtDate(monthInput.value + '-01', { month: 'long', year: 'numeric' }) : 'All months';
-  rows = await api.get(`/api/releases?${serverQuery()}`);
+  rows = await api.call('releases', serverQuery());
   render();
 }
 
@@ -204,18 +204,22 @@ form.addEventListener('submit', async e => {
   if (form.bank.disabled) body.bank = '';
   if (needsBank(body.transaction_type) && !body.bank) { toast(`Pick a bank for ${body.transaction_type}`); return; }
   try {
-    if (editing) await api.send('PUT', `/api/releases/${editing.id}`, body);
-    else await api.send('POST', '/api/releases', body);
+    const btn = form.querySelector('button[type=submit]');
+    btn.disabled = true; btn.textContent = 'Saving…';
+    try {
+      if (editing) await api.call('updateRelease', { id: editing.id, changes: body });
+      else await api.call('createRelease', { release: body });
+    } finally { btn.disabled = false; btn.textContent = 'Save'; }
     dlg.close();
     toast(editing ? 'Release updated' : 'Release added');
-    meta = await api.get('/api/meta'); // refresh GRM list
+    meta = await api.call('meta'); // refresh GRM list
     load();
   } catch (err) { toast(err.message); }
 });
 
 $('#delBtn').onclick = async () => {
   if (!editing || !confirm(`Delete the release for ${editing.client || 'this client'}?`)) return;
-  await api.send('DELETE', `/api/releases/${editing.id}`);
+  await api.call('deleteRelease', { id: editing.id });
   dlg.close();
   toast('Release deleted');
   load();
@@ -229,7 +233,8 @@ $('#rows').addEventListener('change', async e => {
   if (!e.target.classList.contains('status-select')) return;
   const id = e.target.closest('tr').dataset.id;
   try {
-    await api.send('PUT', `/api/releases/${id}`, { status: e.target.value });
+    e.target.disabled = true;
+    await api.call('updateRelease', { id: +id, changes: { status: e.target.value } });
     toast(`Status set to ${e.target.value}`);
     load();
   } catch (err) { toast(err.message); }
@@ -240,25 +245,62 @@ $('#addBtn').onclick = () => branchSel.value ? openDialog() : toast('Add a deale
 // Export exactly what's on screen (after column filters + sort), in the spreadsheet's layout
 $('#exportBtn').onclick = e => {
   e.preventDefault();
-  const head = ['BRANCH', 'TARGET RELEASE DATE', 'VARIANT', 'UNIT', 'COLOR', 'CS NUMBER', 'TRANSACTION', 'BANK', 'CLIENT', 'GRM', 'STATUS', 'REMARKS'];
-  const q = v => /[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v;
-  const lines = shown.map(r => {
-    const [y, m, d] = r.target_date.split('-').map(Number);
-    return [r.branch, `${m}/${d}/${y}`, r.variant, r.unit, r.color, r.cs_number, r.transaction_type, r.bank, r.client, r.grm, r.status, r.remarks]
-      .map(v => q(String(v ?? ''))).join(',');
-  });
-  const blob = new Blob(['\ufeff' + [head.join(','), ...lines].join('\r\n')], { type: 'text/csv' });
-  const a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(blob), download: `${branchSel.value} releases${monthInput.value ? ' ' + monthInput.value : ''}.csv` });
-  a.click();
-  URL.revokeObjectURL(a.href);
+  download(`${branchSel.value} releases${monthInput.value ? ' ' + monthInput.value : ''}.csv`, toCsv(shown));
 };
+
+// ---------- CSV import: parse in the browser, the server validates each row
+function parseCsv(text) {
+  const rows = [];
+  let row = [], cell = '', quoted = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (quoted) {
+      if (c === '"' && text[i + 1] === '"') { cell += '"'; i++; }
+      else if (c === '"') quoted = false;
+      else cell += c;
+    } else if (c === '"') quoted = true;
+    else if (c === ',') { row.push(cell); cell = ''; }
+    else if (c === '\n' || c === '\r') {
+      if (c === '\r' && text[i + 1] === '\n') i++;
+      row.push(cell); rows.push(row); row = []; cell = '';
+    } else cell += c;
+  }
+  if (cell || row.length) { row.push(cell); rows.push(row); }
+  return rows;
+}
+
+const CSV_ALIAS = {
+  'branch': 'branch', 'dealer': 'branch', 'target release date': 'target_date', 'target date': 'target_date',
+  'release date': 'target_date', 'date': 'target_date', 'variant': 'variant', 'unit': 'unit', 'color': 'color',
+  'colour': 'color', 'cs number': 'cs_number', 'cs no': 'cs_number', 'transaction': 'transaction_type',
+  'transaction type': 'transaction_type', 'bank': 'bank', 'client': 'client', 'grm': 'grm', 'status': 'status', 'remarks': 'remarks',
+};
+
+function parseReleaseCsv(text) {
+  const grid = parseCsv(text.replace(/^\ufeff/, ''));
+  // sheet exports often have a title row above the real header
+  const h = grid.findIndex(r => { const u = r.join(',').toUpperCase(); return u.includes('VARIANT') && u.includes('STATUS'); });
+  if (h < 0) return [];
+  const keys = grid[h].map(x => CSV_ALIAS[x.trim().toLowerCase().replace(/\s+/g, ' ')]);
+  const out = [];
+  grid.slice(h + 1).forEach((r, i) => {
+    if (!r.some(v => v.trim())) return;
+    const rec = { _row: h + i + 2 };
+    keys.forEach((k, j) => { if (k) rec[k] = (r[j] || '').trim(); });
+    out.push(rec);
+  });
+  return out;
+}
 
 $('#importBtn').onclick = () => $('#importFile').click();
 $('#importFile').onchange = async e => {
   const file = e.target.files[0];
   if (!file) return;
   try {
-    const res = await api.send('POST', `/api/import?branch=${encodeURIComponent(branchSel.value)}`, await file.text(), true);
+    const parsed = parseReleaseCsv(await file.text());
+    if (!parsed.length) throw new Error('No rows found. Is there a header row with VARIANT and STATUS?');
+    toast(`Importing ${parsed.length} rows…`);
+    const res = await api.call('importReleases', { rows: parsed, branch: branchSel.value });
     toast(`Imported ${res.added} rows${res.error_count ? `, ${res.error_count} skipped` : ''}`);
     if (res.errors.length) console.warn('Import issues:', res.errors);
     await loadMeta();

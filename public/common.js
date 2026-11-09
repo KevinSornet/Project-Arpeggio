@@ -1,42 +1,92 @@
 // Shared helpers for Arpeggio pages.
+//
+// All data goes through api.call(action, params). With an Apps Script URL in config.js the request
+// goes to Google; without one, the same backend code (core.js) runs right here in the browser on
+// demo data (demo-backend.js).
+const CONFIG = window.ARPEGGIO_CONFIG || {};
+const API_URL = (CONFIG.apiUrl || '').trim();
+const DEMO = !API_URL;
+const TOKEN_KEY = 'arpeggio.token';
+
+function getToken() { try { return localStorage.getItem(TOKEN_KEY) || ''; } catch { return ''; } }
+function setToken(t) { try { t ? localStorage.setItem(TOKEN_KEY, t) : localStorage.removeItem(TOKEN_KEY); } catch {} }
+
+function currentPage() { return (location.pathname.split('/').pop() || 'index.html') + location.search; }
+
 function toLogin() {
-  location.href = '/login?next=' + encodeURIComponent(location.pathname + location.search);
+  location.href = 'login.html?next=' + encodeURIComponent(currentPage());
   return new Promise(() => {}); // stop the caller while the page navigates away
 }
 
+function loadScript(src) {
+  return new Promise((resolve, reject) => {
+    const el = Object.assign(document.createElement('script'), { src, onload: resolve, onerror: () => reject(new Error('Could not load ' + src)) });
+    document.head.append(el);
+  });
+}
+let demoReady = null;
+function demoBackend() {
+  demoReady = demoReady || (window.Arpeggio ? Promise.resolve() : loadScript('core.js')).then(() => loadScript('demo-backend.js'));
+  return demoReady.then(() => window.DemoBackend);
+}
+
 const api = {
-  async get(path) {
-    const r = await fetch(path);
-    if (r.status === 401) return toLogin();
-    if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || r.statusText);
-    return r.json();
-  },
-  async send(method, path, body, raw = false) {
-    const r = await fetch(path, {
-      method,
-      headers: raw ? { 'Content-Type': 'text/csv' } : { 'Content-Type': 'application/json' },
-      body: raw ? body : JSON.stringify(body),
-    });
-    if (r.status === 401 && !path.startsWith('/api/login') && !path.startsWith('/api/me/password')) return toLogin();
-    const data = await r.json().catch(() => ({}));
-    if (!r.ok) throw new Error(data.error || r.statusText);
-    return data;
+  async call(action, params = {}) {
+    const req = { ...params, action, token: getToken() };
+    let res;
+    if (DEMO) {
+      res = (await demoBackend()).handle(req);
+    } else {
+      let r;
+      try {
+        // text/plain keeps this a "simple" request, which Apps Script accepts from any website
+        r = await fetch(API_URL, { method: 'POST', body: JSON.stringify(req), redirect: 'follow' });
+      } catch {
+        throw new Error('Can\'t reach the server. Check your internet connection.');
+      }
+      res = await r.json().catch(() => ({ error: 'Unexpected reply from the server', status: 502 }));
+    }
+    if (res && res.error) {
+      if (res.status === 401 && action !== 'login' && action !== 'changePassword') { setToken(''); return toLogin(); }
+      throw new Error(res.error);
+    }
+    return res;
   },
 };
 
+function toCsv(rows) {
+  const head = ['BRANCH', 'TARGET RELEASE DATE', 'VARIANT', 'UNIT', 'COLOR', 'CS NUMBER', 'TRANSACTION', 'BANK', 'CLIENT', 'GRM', 'STATUS', 'REMARKS'];
+  const q = v => /[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v;
+  const lines = rows.map(r => {
+    const [y, m, d] = r.target_date.split('-').map(Number);
+    return [r.branch, `${m}/${d}/${y}`, r.variant, r.unit, r.color, r.cs_number, r.transaction_type, r.bank, r.client, r.grm, r.status, r.remarks]
+      .map(v => q(String(v ?? ''))).join(',');
+  });
+  return '﻿' + [head.join(','), ...lines].join('\r\n');
+}
+
+function download(filename, text, type = 'text/csv') {
+  const a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(new Blob([text], { type })), download: filename });
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+
 // ---------- page shell: navigation + signed-in user menu
 const PAGES = [
-  { key: 'sales', href: '/sales', label: 'Sales entry' },
-  { key: 'dashboard', href: '/dashboard', label: 'Dashboard' },
-  { key: 'references', href: '/references', label: 'Data references', admin: true },
-  { key: 'users', href: '/users', label: 'Users', admin: true },
+  { key: 'sales', href: 'sales.html', label: 'Sales entry' },
+  { key: 'dashboard', href: 'dashboard.html', label: 'Dashboard' },
+  { key: 'references', href: 'references.html', label: 'Data references', admin: true },
+  { key: 'users', href: 'users.html', label: 'Users', admin: true },
 ];
 const ROLE_LABEL = { admin: 'Admin', manager: 'Manager', dealer: 'Dealer staff' };
 let me = null;
 
 async function initShell() {
-  me = await api.get('/api/me');
+  if (!getToken()) return toLogin();
+  me = await api.call('me');
   const nav = $('nav.nav[data-page]');
+  const page = PAGES.find(p => p.key === nav?.dataset.page);
+  if (page?.admin && me.role !== 'admin') { location.href = 'sales.html'; return new Promise(() => {}); }
   if (nav) {
     nav.innerHTML = PAGES.filter(p => !p.admin || me.role === 'admin').map(p =>
       `<a href="${p.href}" class="${p.key === nav.dataset.page ? 'active' : ''}">${p.label}</a>`).join('');
@@ -46,10 +96,12 @@ async function initShell() {
     bar.insertAdjacentHTML('beforeend', `
       <details class="user-menu" id="userMenu">
         <summary><span class="avatar">${esc((me.name || me.username).slice(0, 1).toUpperCase())}</span>
+          ${DEMO ? '<span class="pill demo-pill" title="Data is fake and stays in this browser">Demo</span>' : ''}
           <span class="who"><b>${esc(me.name || me.username)}</b><small>${ROLE_LABEL[me.role]}${me.dealer ? ' · ' + esc(me.dealer) : ''}</small></span></summary>
         <div class="menu">
           <div class="muted" style="font-size:12px;padding:4px 8px">Signed in as ${esc(me.username)}</div>
           <button type="button" id="pwBtn">Change password</button>
+          ${DEMO ? '<button type="button" id="demoResetBtn">Reset demo data</button>' : ''}
           <button type="button" id="logoutBtn">Sign out</button>
         </div>
       </details>
@@ -62,7 +114,11 @@ async function initShell() {
         </div>
         <div class="dialog-actions"><button type="button" id="pwCancel">Cancel</button><button class="primary">Save password</button></div>
       </form></dialog>`);
-    $('#logoutBtn').onclick = async () => { await api.send('POST', '/api/logout', {}); location.href = '/login'; };
+    $('#logoutBtn').onclick = () => { setToken(''); location.href = 'login.html'; };
+    if (DEMO) $('#demoResetBtn').onclick = async () => {
+      if (!confirm('Throw away all demo changes and start over with fresh demo data?')) return;
+      (await demoBackend()).reset(); setToken(''); location.href = 'login.html';
+    };
     $('#pwBtn').onclick = () => { $('#userMenu').open = false; $('#pwForm').reset(); $('#pwDlg').showModal(); };
     $('#pwCancel').onclick = () => $('#pwDlg').close();
     $('#pwForm').onsubmit = async e => {
@@ -70,7 +126,8 @@ async function initShell() {
       const f = e.target;
       if (f.new.value !== f.again.value) return toast('New passwords don\'t match');
       try {
-        await api.send('POST', '/api/me/password', { current: f.current.value, new: f.new.value });
+        const res = await api.call('changePassword', { current: f.current.value, new: f.new.value });
+        setToken(res.token);
         $('#pwDlg').close();
         toast('Password changed');
       } catch (err) { toast(err.message); }

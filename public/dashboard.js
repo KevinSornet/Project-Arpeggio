@@ -182,22 +182,39 @@ function render(s) {
   $('#updated').textContent = `Updated ${new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`;
 }
 
+// Data is fetched once (and refreshed every minute); changing filters just recalculates here.
 let lastStats = null;
-async function load() {
-  const p = new URLSearchParams();
-  if ($('#from').value) p.set('from', $('#from').value);
-  if ($('#to').value) p.set('to', $('#to').value);
-  if ($('#branch').value) p.set('branch', $('#branch').value);
-  $('#exportBtn').href = `/api/export.csv?${p}`;
+let allRows = [];
+let meta = null;
+
+function filters() {
+  return { from: $('#from').value, to: $('#to').value, branch: $('#branch').value };
+}
+
+function load() {
+  if (!meta) return;
+  lastStats = Stats.compute(allRows, meta, filters(), meta.today);
+  render(lastStats);
+}
+
+async function fetchData() {
   try {
-    lastStats = await api.get(`/api/stats?${p}`);
-    render(lastStats);
+    const [m, rows] = await Promise.all([api.call('meta'), api.call('releases')]);
+    meta = m; allRows = rows; today = m.today;
+    load();
   } catch (err) { toast(err.message); }
 }
 
+$('#exportBtn').addEventListener('click', e => {
+  e.preventDefault();
+  const f = filters();
+  const rows = allRows.filter(r => (!f.branch || r.branch === f.branch) && (!f.from || r.target_date >= f.from) && (!f.to || r.target_date <= f.to));
+  download(`releases${f.branch ? ' ' + f.branch : ''}${f.from ? ' ' + f.from : ''}${f.to ? ' to ' + f.to : ''}.csv`, toCsv(rows));
+});
+
 async function init() {
   await initShell();
-  const meta = await api.get('/api/meta');
+  meta = await api.call('meta');
   today = meta.today;
   $('#branch').innerHTML = '<option value="">All dealers</option>' + meta.branches.map(b => `<option>${esc(b)}</option>`).join('');
   $('#branch').value = store.get('arpeggio.dashBranch', '');
@@ -208,8 +225,10 @@ async function init() {
     load();
   }));
   $('#branch').addEventListener('change', () => { store.set('arpeggio.dashBranch', $('#branch').value); load(); });
+  meta = null;            // applyPreset sets the dates; draw once the rows arrive
   applyPreset(preset);
-  setInterval(load, 60_000); // live: pick up new dealer entries every minute
+  await fetchData();
+  setInterval(fetchData, 60_000); // live: pick up new dealer entries every minute
   matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => lastStats && render(lastStats));
 }
 
