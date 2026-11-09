@@ -169,7 +169,6 @@ function fillSelect(sel, values, current) {
 
 function syncFormLists(keepUnit) {
   fillSelect(form.unit, meta.catalog[form.variant.value] || [], keepUnit);
-  $('#grmList').innerHTML = (meta.grms[branchSel.value] || []).map(g => opt(g)).join('');
   form.bank.disabled = !needsBank(form.transaction_type.value);
   if (form.bank.disabled) form.bank.value = '';
 }
@@ -187,6 +186,9 @@ function openDialog(rec = null) {
   }
   fillSelect(form.color, meta.colors, data.color);
   fillSelect(form.bank, meta.banks, data.bank);
+  const grms = meta.grms[branchSel.value] || [];
+  fillSelect(form.grm, grms, data.grm);
+  if (!grms.length && !data.grm) form.grm.options[0].textContent = '— none listed for this dealer —';
   for (const el of form.elements) if (el.name && data[el.name] != null && el.name !== 'unit') el.value = data[el.name];
   syncFormLists(rec ? rec.unit : (meta.catalog[form.variant.value] || [''])[0]);
   if (rec) form.bank.value = rec.bank || '';

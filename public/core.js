@@ -15,6 +15,7 @@ var Arpeggio = (function () {
   // ------------------------------------------------------------ reference data
   var REF_KINDS = {
     dealer: { field: 'branch', label: 'Dealers' },
+    grm: { field: 'grm', label: 'GRMs' },                    // parent = dealer
     variant: { field: 'variant', label: 'Variants' },
     unit: { field: 'unit', label: 'Units' },               // parent = variant
     color: { field: 'color', label: 'Colors' },
@@ -22,6 +23,7 @@ var Arpeggio = (function () {
     status: { field: 'status', label: 'Statuses' },        // category: open | sold | cancelled
     bank: { field: 'bank', label: 'Banks' },
   };
+  var PARENT_KIND = { unit: 'variant', grm: 'dealer' };
   var STATUS_CATEGORIES = ['open', 'sold', 'cancelled'];
   var ROLES = {
     admin: 'Admin — everything, incl. users and data references',
@@ -256,7 +258,7 @@ var Arpeggio = (function () {
 
   // ------------------------------------------------------------ actions
   var PUBLIC_ACTIONS = { ping: 1, login: 1 };
-  var WRITE_ACTIONS = { login: 1, changePassword: 1, createRelease: 1, updateRelease: 1, deleteRelease: 1, importReleases: 1,
+  var WRITE_ACTIONS = { login: 1, importUsedGrms: 1, changePassword: 1, createRelease: 1, updateRelease: 1, deleteRelease: 1, importReleases: 1,
     addRefs: 1, updateRef: 1, deleteRef: 1, reorderRefs: 1, createUser: 1, updateUser: 1, deleteUser: 1 };
 
   function refsPayload(db) {
@@ -269,7 +271,12 @@ var Arpeggio = (function () {
     });
     var kinds = {};
     Object.keys(REF_KINDS).forEach(function (k) { kinds[k] = REF_KINDS[k].label; });
-    return { kinds: kinds, refs: refs, status_categories: STATUS_CATEGORIES };
+    // GRM names typed on releases that aren't in the GRM list yet (offered as a one-click import)
+    var knownGrm = {}, unlisted = {};
+    refs.grm.forEach(function (g) { knownGrm[key(g.name)] = 1; });
+    rel.forEach(function (r) { var k = key(r.grm); if (k && k !== '-' && !knownGrm[k]) unlisted[k] = 1; });
+    return { kinds: kinds, refs: refs, status_categories: STATUS_CATEGORIES, parent_kind: PARENT_KIND,
+      unlisted_grms: Object.keys(unlisted).length };
   }
 
   function handle(req, env) {
@@ -339,10 +346,9 @@ var Arpeggio = (function () {
         var lk = new Lookups(refs);
         var mine = user.role === 'dealer' ? myBranch() : null;
         var grms = {};
-        db.all('releases').forEach(function (r) {
-          if (r.grm && (mine === null || r.branch === mine)) (grms[r.branch] = grms[r.branch] || {})[r.grm] = 1;
+        refs.grm.forEach(function (g) {
+          if (mine === null || g.parent === mine) (grms[g.parent] = grms[g.parent] || []).push(g.name);
         });
-        Object.keys(grms).forEach(function (b) { grms[b] = Object.keys(grms[b]).sort(); });
         var catalog = {};
         refs.variant.forEach(function (v) { catalog[v.name] = []; });
         refs.unit.forEach(function (u) { (catalog[u.parent] = catalog[u.parent] || []).push(u.name); });
@@ -437,6 +443,7 @@ var Arpeggio = (function () {
         var names = String(req.name || '').split(/[\r\n]+/).filter(function (n) { return n.trim(); });
         if (!names.length) bad('Name is required');
         if (req.kind === 'unit' && !str(req.parent)) bad('Pick the variant this unit belongs to');
+        if (req.kind === 'grm' && !str(req.parent)) bad('Pick the dealer this GRM works for');
         var cat = str(req.category) || (req.kind === 'status' ? 'open' : '');
         var n = 0;
         names.forEach(function (nm) { if (addRef(db, req.kind, nm, req.parent, cat)) n++; });
@@ -458,7 +465,10 @@ var Arpeggio = (function () {
           var field = REF_KINDS[ref.kind].field, old = ref.name;
           db.updateWhere('releases', function (r) { return r[field] === old; }, function () { var o = {}; o[field] = name; return o; });
           if (ref.kind === 'variant') db.updateWhere('refs', function (r) { return r.kind === 'unit' && r.parent === old; }, function () { return { parent: name }; });
-          if (ref.kind === 'dealer') db.updateWhere('users', function (u) { return u.dealer === old; }, function () { return { dealer: name }; });
+          if (ref.kind === 'dealer') {
+            db.updateWhere('users', function (u) { return u.dealer === old; }, function () { return { dealer: name }; });
+            db.updateWhere('refs', function (r) { return r.kind === 'grm' && r.parent === old; }, function () { return { parent: name }; });
+          }
         }
         return refsPayload(db);
       }
@@ -467,10 +477,26 @@ var Arpeggio = (function () {
         var target = db.get('refs', +req.id);
         if (target) {
           var ids = [target.id];
-          if (target.kind === 'variant') db.all('refs').forEach(function (r) { if (r.kind === 'unit' && r.parent === target.name) ids.push(r.id); });
+          var childKind = { variant: 'unit', dealer: 'grm' }[target.kind];
+          if (childKind) db.all('refs').forEach(function (r) { if (r.kind === childKind && r.parent === target.name) ids.push(r.id); });
           db.remove('refs', ids);
         }
         return refsPayload(db);
+      }
+      case 'importUsedGrms': {
+        requireRole('admin');
+        var known = {};
+        db.all('refs').forEach(function (r) { if (r.kind === 'grm') known[key(r.name)] = 1; });
+        var found = [];
+        db.all('releases').forEach(function (r) {
+          var k = key(r.grm);
+          if (k && k !== '-' && !known[k]) { known[k] = 1; found.push({ name: r.grm, parent: r.branch }); }
+        });
+        found.sort(function (a, b) { return (a.parent + a.name).localeCompare(b.parent + b.name); });
+        var added = 0;
+        found.forEach(function (g) { if (addRef(db, 'grm', g.name, g.parent, '')) added++; });
+        var pl = refsPayload(db); pl.added = added;
+        return pl;
       }
       case 'reorderRefs': {
         requireRole('admin');
@@ -546,7 +572,7 @@ var Arpeggio = (function () {
   }
 
   return {
-    REF_KINDS: REF_KINDS, STATUS_CATEGORIES: STATUS_CATEGORIES, ROLES: ROLES, DEFAULT_REFS: DEFAULT_REFS,
+    REF_KINDS: REF_KINDS, PARENT_KIND: PARENT_KIND, STATUS_CATEGORIES: STATUS_CATEGORIES, ROLES: ROLES, DEFAULT_REFS: DEFAULT_REFS,
     FIELDS: FIELDS, TABLES: TABLES, INT_FIELDS: INT_FIELDS,
     handle: handle, setup: setup, hashPassword: hashPassword, parseDate: parseDate, Lookups: Lookups, cleanRecord: cleanRecord,
     canonicalizeRows: canonicalizeRows, key: key, refsByKind: refsByKind,

@@ -185,11 +185,20 @@ var DemoBackend = (function () {
     var sold = refs.status.filter(function (s) { return s.category === 'sold'; })[0].name;
     var cancelled = refs.status.filter(function (s) { return s.category === 'cancelled'; })[0].name;
     var open = refs.status.filter(function (s) { return (s.category || 'open') === 'open'; }).map(function (s) { return s.name; });
-    var sizes = {}, grms = {};
+    var sizes = {}, grms = {}, usedNames = {}, grmRows = [];
     dealers.forEach(function (d) {
       sizes[d] = 0.5 + rnd() * 0.8;
-      grms[d] = [0, 1, 2].slice(0, 2 + Math.floor(rnd() * 2)).map(function () { return pick(FIRST) + ' ' + pick(LAST); });
+      grms[d] = [];
+      var want = 2 + Math.floor(rnd() * 2);
+      while (grms[d].length < want) {
+        var nm = pick(FIRST) + ' ' + pick(LAST);
+        if (usedNames[nm]) continue;
+        usedNames[nm] = 1;
+        grms[d].push(nm);
+        grmRows.push({ kind: 'grm', name: nm, parent: d, category: '', sort: grmRows.length });
+      }
     });
+    db.insertMany('refs', grmRows);
 
     var today = env.today();
     var t0 = new Date(today + 'T00:00:00Z');

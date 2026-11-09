@@ -28,16 +28,21 @@
             <h2 id="kindTitle"></h2>
             <div class="sub" id="kindHelp"></div>
           </div>
-          <label id="variantFilterWrap" hidden>Show units for
-            <select id="variantFilter"></select>
+          <label id="parentFilterWrap" hidden><span id="parentFilterLabel">Show for</span>
+            <select id="parentFilter"></select>
           </label>
+        </div>
+
+        <div class="card" id="grmImport" hidden style="margin-bottom:12px;padding:10px 14px;display:flex;align-items:center;gap:12px;justify-content:space-between">
+          <span id="grmImportText"></span>
+          <button type="button" id="grmImportBtn">Add them to the list</button>
         </div>
 
         <form id="addForm" class="toolbar" style="margin-bottom:12px">
           <label style="flex:1;min-width:220px">Add new <span class="muted" style="font-weight:400">(paste several, one per line)</span>
             <textarea name="name" rows="1" placeholder="Type a name…" required></textarea>
           </label>
-          <label id="addParentWrap" hidden>Variant<select name="parent"></select></label>
+          <label id="addParentWrap" hidden><span id="addParentLabel">Belongs to</span><select name="parent"></select></label>
           <label id="addCategoryWrap" hidden>Category<select name="category"></select></label>
           <button class="primary" type="submit">Add</button>
         </form>

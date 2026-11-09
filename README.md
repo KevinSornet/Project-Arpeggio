@@ -5,7 +5,7 @@ A web app for dealer release pipelines. Everyone signs in; what they see depends
 | Page | File | Who | What |
 |---|---|---|---|
 | **Sales entry** | `sales.html` | Dealer sales teams | Pick your dealer, add/edit release plans (target date, variant, unit, color, CS number, transaction, bank, client, GRM, status, remarks), change status inline, **filter and sort every column**, import CSV, export the filtered rows to CSV. |
-| **Data references** | `references.html` | Admin | Edit the lists behind every dropdown: dealers, variants, units (linked to a variant), colors, transactions, statuses, banks. Add (paste many at once), rename, reorder, delete. Renames update existing releases. |
+| **Data references** | `references.html` | Admin | Edit the lists behind every dropdown: dealers, GRMs (linked to a dealer), variants, units (linked to a variant), colors, transactions, statuses, banks. Add (paste many at once), rename, reorder, delete. Renames update existing releases. |
 | **Users** | `users.html` | Admin | Create accounts: **Admin** (everything), **Manager** (all dealers), **Dealer staff** (own dealer only). |
 | **Dashboard** | `dashboard.html` | Everyone (dealer staff see their own dealer) | Every dealer compiled live: units sold, open pipeline, cancellation rate, financed share, sales by branch/variant/bank, GRM leaderboard, next‑8‑weeks pipeline, upcoming releases, and **sales forecasts**. |
 

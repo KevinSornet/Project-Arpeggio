@@ -59,17 +59,16 @@
         <label>Transaction<select name="transaction_type"></select></label>
         <label>Bank<select name="bank"><option value="">—</option></select></label>
         <label class="two">Client<input name="client" required></label>
-        <label>GRM<input name="grm" list="grmList" autocomplete="off"></label>
+        <label>GRM<select name="grm"></select></label>
         <label class="two">Status<select name="status"></select></label>
         <label class="wide">Remarks<textarea name="remarks" rows="2"></textarea></label>
       </div>
-      <p class="muted" style="font-size:12px;margin:-4px 0 12px">Missing a unit, color or bank? Add it under <a href="references.html">Data references</a>.</p>
+      <p class="muted" style="font-size:12px;margin:-4px 0 12px">Missing a unit, color, bank or GRM? Add it under <a href="references.html">Data references</a>.</p>
       <div class="dialog-actions">
         <button type="button" class="danger" id="delBtn" style="margin-right:auto">Delete</button>
         <button type="button" id="cancelBtn">Cancel</button>
         <button type="submit" class="primary" value="save">Save</button>
       </div>
-      <datalist id="grmList"></datalist>
     </form>
   </dialog>
 
