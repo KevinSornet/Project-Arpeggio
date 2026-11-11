@@ -1,4 +1,4 @@
-# Putting Arpeggio online (GitHub Pages + Google Sheets)
+# Putting SVC Sales Tracker online (GitHub Pages + Google Sheets)
 
 How it fits together:
 
@@ -22,7 +22,7 @@ All free. Allow about 20 minutes.
 
 ## 1. Create the sheet and its script
 
-1. Go to [sheets.new](https://sheets.new) and name the sheet **Arpeggio Data**.
+1. Go to [sheets.new](https://sheets.new) and name the sheet **SVC Sales Tracker Data**.
 2. In the sheet: **Extensions → Apps Script**. A script editor opens.
 3. In the editor's left panel you'll see `Code.gs`. Replace its contents with
    [`apps-script/Code.gs`](apps-script/Code.gs) from this repo.
@@ -45,7 +45,7 @@ Your sheet now has **Releases**, **References** and **Users** tabs.
 
 1. **Deploy → New deployment** → click the ⚙️ next to *Select type* → **Web app**.
 2. Set **Execute as: Me** and **Who has access: Anyone**.
-   ("Anyone" lets the website reach the script. The script still requires an Arpeggio sign-in for everything.)
+   ("Anyone" lets the website reach the script. The script still requires a sign-in for everything.)
 3. **Deploy**, then copy the **Web app URL**. It ends in `/exec`.
 4. In this repo, open [`public/config.js`](public/config.js) and paste it in:
    ```js

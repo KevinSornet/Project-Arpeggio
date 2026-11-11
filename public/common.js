@@ -1,4 +1,4 @@
-// Shared helpers for Arpeggio pages.
+// Shared helpers for SVC Sales Tracker pages.
 //
 // All data goes through api.call(action, params). With an Apps Script URL in config.js the request
 // goes to Google; without one, the same backend code (core.js) runs right here in the browser on
@@ -45,7 +45,7 @@ const api = {
         // Apps Script error pages can't be read cross-site, so a crashed script looks like a network failure.
         throw new Error(navigator.onLine === false
           ? 'You\'re offline. Check your internet connection.'
-          : 'The Arpeggio server didn\'t respond properly. If this keeps happening, the admin should check the Apps Script deployment (see DEPLOY.md).');
+          : 'The SVC Sales Tracker server didn\'t respond properly. If this keeps happening, the admin should check the Apps Script deployment (see DEPLOY.md).');
       }
       res = await r.json().catch(() => ({ error: 'Unexpected reply from the server', status: 502 }));
     }

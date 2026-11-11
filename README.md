@@ -1,4 +1,4 @@
-# Arpeggio — Vehicle Release Pipeline
+# SVC Sales Tracker — Vehicle Release Pipeline
 
 A web app for dealer release pipelines. Everyone signs in; what they see depends on their role.
 

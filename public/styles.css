@@ -227,3 +227,15 @@ tr.inactive td { opacity: .5; }
 .demo-pill { background: color-mix(in srgb, var(--warning) 30%, transparent); font-size: 11px; padding: 1px 8px; }
 .demo-accounts { display: flex; flex-direction: column; gap: 6px; }
 .demo-acct { justify-content: space-between; font-weight: 500; }
+
+/* SVC brand */
+.brand-logo { height: 26px; width: auto; display: block; }
+.brand-name { font-weight: 700; letter-spacing: .01em; white-space: nowrap; }
+.brand-login .brand-logo { height: 38px; }
+.brand-login .brand-name { font-size: 18px; }
+@media (max-width: 760px) { .brand-name { display: none; } }
+/* the logo file is made for white backgrounds: give it a white tile in dark mode */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .brand-logo { background: #fff; border-radius: 6px; padding: 3px 6px; box-sizing: content-box; height: 22px; }
+}
+:root[data-theme="dark"] .brand-logo { background: #fff; border-radius: 6px; padding: 3px 6px; box-sizing: content-box; height: 22px; }
