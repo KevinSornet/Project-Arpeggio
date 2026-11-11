@@ -86,8 +86,8 @@ var Arpeggio = (function () {
   var MAX_FAILS = 8;
 
   // ------------------------------------------------------------ helpers
-  function ApiError(message, status) { this.message = message; this.status = status || 400; }
-  function bad(msg, status) { throw new ApiError(msg, status); }
+  function ApiError(message, status, extra) { this.message = message; this.status = status || 400; this.extra = extra; }
+  function bad(msg, status, extra) { throw new ApiError(msg, status, extra); }
 
   function key(v) { return String(v == null ? '' : v).trim().replace(/[\s_]+/g, ' ').toLowerCase(); }
   function str(v) { return v == null ? '' : String(v).trim(); }
@@ -285,7 +285,11 @@ var Arpeggio = (function () {
       var run = function () { return route(req, env); };
       return WRITE_ACTIONS[req.action] ? env.withLock(run) : run();
     } catch (e) {
-      if (e instanceof ApiError) return { error: e.message, status: e.status };
+      if (e instanceof ApiError) {
+        var out = { error: e.message, status: e.status };
+        if (e.extra) Object.keys(e.extra).forEach(function (k) { out[k] = e.extra[k]; });
+        return out;
+      }
       return { error: 'Server error: ' + (e && e.message ? e.message : e), status: 500 };
     }
   }
@@ -403,9 +407,24 @@ var Arpeggio = (function () {
         var existing = db.get('releases', +req.id);
         if (!existing) bad('Not found', 404);
         canTouch(existing);
+        var changes = req.changes || {};
+        // Two people editing the same release: `base` holds the values this person saw when they
+        // opened it (for the fields they changed). If someone else has since changed one of those
+        // same fields to something different, stop instead of silently overwriting their work.
+        // Changes to *different* fields are simply merged below.
+        if (req.base) {
+          var clashes = Object.keys(changes).filter(function (k) {
+            return FIELDS.indexOf(k) >= 0 && k in req.base
+              && key(existing[k]) !== key(req.base[k]) && key(existing[k]) !== key(changes[k]);
+          });
+          if (clashes.length) {
+            bad((existing.updated_by || 'Someone') + ' changed this release while you were editing it', 409,
+              { conflict: true, current: existing, fields: clashes });
+          }
+        }
         var merged = {};
         Object.keys(existing).forEach(function (k) { merged[k] = existing[k]; });
-        Object.keys(req.changes || {}).forEach(function (k) { merged[k] = req.changes[k]; });
+        Object.keys(changes).forEach(function (k) { merged[k] = changes[k]; });
         merged.branch = myBranch(merged.branch);
         var upd = cleanRecord(merged, new Lookups(refsByKind(db)));
         addRef(db, 'dealer', upd.branch);

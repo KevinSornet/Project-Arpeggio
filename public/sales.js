@@ -200,13 +200,20 @@ function syncFormLists(keepUnit) {
   if (form.bank.disabled) form.bank.value = '';
 }
 
+const FORM_FIELDS = ['target_date', 'variant', 'unit', 'color', 'cs_number', 'transaction_type', 'bank', 'client', 'grm', 'status', 'remarks'];
+
 function openDialog(rec = null) {
   editing = rec;
-  form.reset();
   $('#dlgTitle').textContent = rec ? 'Edit release' : 'New release';
   $('#dlgBranch').textContent = branchSel.value;
   $('#delBtn').hidden = !rec;
-  const data = rec || { target_date: meta.today, status: meta.default_status, transaction_type: 'FINANCING', variant: Object.keys(meta.catalog)[0] };
+  $('#conflictBox').hidden = true;
+  fillForm(rec || { target_date: meta.today, status: meta.default_status, transaction_type: 'FINANCING', variant: Object.keys(meta.catalog)[0] }, !!rec);
+  dlg.showModal();
+}
+
+function fillForm(data, existing) {
+  form.reset();
   for (const k of ['variant', 'transaction_type', 'status']) {
     const sel = form[k];
     if (data[k] && ![...sel.options].some(o => o.value === data[k])) sel.insertAdjacentHTML('afterbegin', opt(data[k]));
@@ -217,9 +224,26 @@ function openDialog(rec = null) {
   fillSelect(form.grm, grms, data.grm);
   if (!grms.length && !data.grm) form.grm.options[0].textContent = '— none listed for this dealer —';
   for (const el of form.elements) if (el.name && data[el.name] != null && el.name !== 'unit') el.value = data[el.name];
-  syncFormLists(rec ? rec.unit : (meta.catalog[form.variant.value] || [''])[0]);
-  if (rec) form.bank.value = rec.bank || '';
-  dlg.showModal();
+  syncFormLists(existing ? data.unit : (meta.catalog[form.variant.value] || [''])[0]);
+  if (existing) form.bank.value = data.bank || '';
+}
+
+const FIELD_LABEL = { target_date: 'Target release', cs_number: 'CS number', transaction_type: 'Transaction', grm: 'GRM' };
+const fieldLabel = k => FIELD_LABEL[k] || k[0].toUpperCase() + k.slice(1);
+const fieldText = (k, v) => (k === 'target_date' && v ? fmtDate(v) : v) || '—';
+
+/** Someone else saved the same field first: show both versions, keep this person's typing. */
+function showConflict(data, mine) {
+  const cur = data.current;
+  upsertRow(cur);
+  load();
+  editing = cur;                    // the next Save is checked against their version
+  fillForm({ ...cur, ...mine }, true); // their latest values + what this person changed
+  const when = cur.updated_at ? new Date(cur.updated_at).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' }) : '';
+  $('#conflictBox').innerHTML = `<b>${esc(cur.updated_by || 'Someone')} changed this release${when ? ' on ' + esc(when) : ''} while you were editing it.</b>
+    <ul>${data.fields.map(k => `<li>${esc(fieldLabel(k))}: theirs <b>${esc(fieldText(k, cur[k]))}</b>, yours <b>${esc(fieldText(k, mine[k]))}</b></li>`).join('')}</ul>
+    Your changes are still in the form. Click <b>Save</b> to use yours, or <b>Cancel</b> to keep theirs.`;
+  $('#conflictBox').hidden = false;
 }
 
 form.variant.addEventListener('change', () => syncFormLists((meta.catalog[form.variant.value] || [''])[0]));
@@ -235,11 +259,20 @@ form.addEventListener('submit', async e => {
   try {
     const btn = form.querySelector('button[type=submit]');
     btn.disabled = true; btn.textContent = 'Saving…';
-    let saved;
-    try {
-      saved = editing ? await api.call('updateRelease', { id: editing.id, changes: body })
-        : await api.call('createRelease', { release: body });
-    } finally { btn.disabled = false; btn.textContent = 'Save'; }
+    let saved, changes = {};
+    if (editing) {
+      const base = {};
+      FORM_FIELDS.forEach(k => {
+        if (String(body[k] ?? '') !== String(editing[k] ?? '')) { changes[k] = body[k] ?? ''; base[k] = editing[k] ?? ''; }
+      });
+      if (!Object.keys(changes).length) { btn.disabled = false; btn.textContent = 'Save'; dlg.close(); toast('No changes to save'); return; }
+      try { saved = await api.call('updateRelease', { id: editing.id, changes, base }); }
+      catch (err) { if (err.data?.conflict) { showConflict(err.data, changes); return; } throw err; }
+      finally { btn.disabled = false; btn.textContent = 'Save'; }
+    } else {
+      try { saved = await api.call('createRelease', { release: body }); }
+      finally { btn.disabled = false; btn.textContent = 'Save'; }
+    }
     upsertRow(saved);
     dlg.close();
     toast(editing ? 'Release updated' : 'Release added');
@@ -274,11 +307,17 @@ $('#rows').addEventListener('change', async e => {
   allRows = allRows.map(r => r.id === id ? { ...r, status, _saving: true } : r);
   load();
   try {
-    upsertRow(await api.call('updateRelease', { id, changes: { status } }));
+    upsertRow(await api.call('updateRelease', { id, changes: { status }, base: { status: before.status } }));
     toast(`Status set to ${status}`);
   } catch (err) {
-    upsertRow(before); // put it back the way it was
-    toast(`Status not saved (${err.message}). It's back to ${before.status}.`);
+    if (err.data?.conflict) {
+      const cur = err.data.current;
+      upsertRow(cur); // show their newer status
+      toast(`${cur.updated_by || 'Someone'} already changed this status to "${cur.status}". Yours wasn't saved.`);
+    } else {
+      upsertRow(before); // put it back the way it was
+      toast(`Status not saved (${err.message}). It's back to ${before.status}.`);
+    }
   }
   load();
 });

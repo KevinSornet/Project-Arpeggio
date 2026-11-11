@@ -195,6 +195,11 @@ th.sortable:hover { color: var(--ink); }
 
 [hidden] { display: none !important; }
 
+/* someone else changed the release being edited */
+.conflict { margin-top: 12px; padding: 10px 12px; border-radius: 8px; font-size: 13px;
+  background: color-mix(in srgb, var(--warning) 18%, var(--surface)); border: 1px solid color-mix(in srgb, var(--warning) 55%, transparent); }
+.conflict ul { margin: 6px 0; padding-left: 18px; }
+
 /* user menu */
 .user-menu { position: relative; }
 .user-menu summary { list-style: none; display: flex; align-items: center; gap: 8px; cursor: pointer; padding: 4px 8px; border-radius: 8px; }

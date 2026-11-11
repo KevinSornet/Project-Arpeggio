@@ -51,7 +51,9 @@ const api = {
     }
     if (res && res.error) {
       if (res.status === 401 && action !== 'login' && action !== 'changePassword') { clearCache(); setToken(''); return toLogin(); }
-      throw new Error(res.error);
+      const e = new Error(res.error);
+      e.data = res;
+      throw e;
     }
     return res;
   },
