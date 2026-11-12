@@ -35,13 +35,22 @@ function render() {
       <td><span class="role-badge ${u.role}">${ROLE_LABEL[u.role]}</span></td>
       <td>${esc(u.dealer) || '<span class="muted">All dealers</span>'}</td>
       <td>${u.active ? 'Yes' : 'Disabled'}</td>
-      <td class="muted">${esc(fmtDate((u.created_at || '').slice(0, 10)))}</td>
+      <td title="${esc(u.last_login)}">${ago(u.last_login)}</td>
+      <td title="${esc(u.last_seen)}">${ago(u.last_seen)}</td>
       <td class="nowrap">
         <button class="icon edit">Edit</button>
         <button class="icon toggle">${u.active ? 'Disable' : 'Enable'}</button>
         ${u.id === me.id ? '' : '<button class="icon danger del">Delete</button>'}
       </td>
     </tr>`).join('');
+}
+
+/** "3 h ago" style time, or "never" */
+function ago(iso) {
+  if (!iso) return '<span class="muted">never</span>';
+  const mins = Math.round((Date.now() - new Date(iso)) / 60000);
+  if (isNaN(mins)) return esc(iso);
+  return mins < 1 ? 'just now' : mins < 60 ? `${mins} min ago` : mins < 1440 ? `${Math.round(mins / 60)} h ago` : `${Math.round(mins / 1440)} d ago`;
 }
 
 function genPassword() {

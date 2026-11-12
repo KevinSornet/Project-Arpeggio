@@ -77,7 +77,11 @@ var Arpeggio = (function () {
       ['id', 'ID'], ['kind', 'LIST'], ['name', 'NAME'], ['parent', 'PARENT VARIANT'], ['category', 'CATEGORY'], ['sort', 'ORDER']] },
     users: { tab: 'Users', cols: [
       ['id', 'ID'], ['username', 'USERNAME'], ['name', 'NAME'], ['role', 'ROLE'], ['dealer', 'DEALER'],
-      ['active', 'ACTIVE'], ['password_hash', 'PASSWORD HASH (DO NOT EDIT)'], ['created_at', 'CREATED AT']] },
+      ['active', 'ACTIVE'], ['password_hash', 'PASSWORD HASH (DO NOT EDIT)'], ['created_at', 'CREATED AT'],
+      ['last_login', 'LAST SIGN-IN'], ['last_seen', 'LAST ACTIVE']] },
+    activity: { tab: 'Activity', cols: [
+      ['id', 'ID'], ['at', 'TIME'], ['username', 'USERNAME'], ['dealer', 'DEALER'], ['action', 'ACTION'],
+      ['release_id', 'RELEASE ID'], ['details', 'DETAILS']] },
   };
   var INT_FIELDS = { id: 1, sort: 1, active: 1 };
 
@@ -229,7 +233,34 @@ var Arpeggio = (function () {
 
   function publicUser(u) {
     return { id: u.id, username: u.username, name: u.name || '', role: u.role, dealer: u.dealer || '',
-      active: u.active ? 1 : 0, created_at: u.created_at || '' };
+      active: u.active ? 1 : 0, created_at: u.created_at || '', last_login: u.last_login || '', last_seen: u.last_seen || '' };
+  }
+
+  // ------------------------------------------------------------ activity log
+  var SEEN_EVERY_MS = 15 * 60 * 1000; // "last active" is refreshed at most this often
+
+  /** One row in the Activity tab. Never lets a logging problem stop the real work. */
+  var lastLogId = 0;
+  function logActivity(env, db, who, dealer, action, details, releaseId) {
+    // millisecond-based id: always increasing (events sort in the order they happened) and only
+    // 13 digits, so Google Sheets (15 significant digits) keeps it exact
+    lastLogId = Math.max(env.now(), lastLogId + 1);
+    var rec = {
+      id: lastLogId,
+      at: env.nowIso(), username: who || '', dealer: dealer || '', action: action,
+      release_id: releaseId == null ? '' : String(releaseId), details: String(details || '').slice(0, 500),
+    };
+    try { if (db.append) db.append('activity', rec); else db.insert('activity', rec); } catch (e) { /* ignore */ }
+  }
+
+  function isoMs(iso) { return iso ? Date.parse(String(iso).replace(' ', 'T') + 'Z') : 0; } // same-zone compare
+
+  var FIELD_NAMES = { target_date: 'date', transaction_type: 'transaction', cs_number: 'CS number', grm: 'GRM' };
+  function show(v) { v = str(v); return v ? v : '(blank)'; }
+  function releaseSummary(r) { return [r.variant, r.client, r.target_date, r.status].filter(Boolean).join(' · '); }
+  function releaseDiff(before, after) {
+    return FIELDS.filter(function (k) { return str(before[k]) !== str(after[k]); })
+      .map(function (k) { return (FIELD_NAMES[k] || k) + ': ' + show(before[k]) + ' → ' + show(after[k]); }).join('; ');
   }
 
   function checkRole(db, data) {
@@ -307,9 +338,15 @@ var Arpeggio = (function () {
       var u = db.all('users').filter(function (x) { return x.username.toLowerCase() === uname; })[0];
       if (!u || !u.active || !verifyPassword(env, req.password, u.password_hash)) {
         env.cache.put(failKey, String(fails + 1), 900);
+        // only for real accounts, so typing random names can't flood the log
+        if (u) logActivity(env, db, u.username, u.dealer, 'login_failed', u.active ? 'wrong password' : 'account is disabled');
         bad('Wrong username or password', 401);
       }
       env.cache.remove(failKey);
+      var nowTs = env.nowIso();
+      db.update('users', u.id, { last_login: nowTs, last_seen: nowTs });
+      logActivity(env, db, u.username, u.dealer, 'login', '');
+      u.last_login = nowTs; u.last_seen = nowTs;
       return { token: makeToken(env, u), user: publicUser(u) };
     }
 
@@ -338,10 +375,14 @@ var Arpeggio = (function () {
           Object.keys(extra || {}).forEach(function (k) { r[k] = extra[k]; });
           return route(r, env);
         };
+        if (isoMs(env.nowIso()) - isoMs(user.last_seen) > SEEN_EVERY_MS) { // both sides in the same time zone
+          try { env.withLock(function () { db.update('users', user.id, { last_seen: env.nowIso() }); }); } catch (e) { /* ignore */ }
+        }
         var res = { me: sub('me'), meta: sub('meta') };
         if (req.releases) res.releases = sub('releases', req.releases);
         if (req.refs) res.refs = sub('refs');
         if (req.users) res.users = sub('users');
+        if (req.activity) res.activity = sub('activity', req.activity);
         return res;
       }
       case 'me':
@@ -353,6 +394,7 @@ var Arpeggio = (function () {
         var h = hashPassword(env, String(req.new));
         db.update('users', user.id, { password_hash: h });
         user.password_hash = h;
+        logActivity(env, db, who, user.dealer, 'password_changed', '');
         return { ok: true, token: makeToken(env, user) };
       }
 
@@ -401,7 +443,9 @@ var Arpeggio = (function () {
         addRef(db, 'dealer', rec.branch);
         var ts = env.nowIso();
         rec.created_at = ts; rec.created_by = who; rec.updated_at = ts; rec.updated_by = who;
-        return db.get('releases', db.insert('releases', rec));
+        var newId = db.insert('releases', rec);
+        logActivity(env, db, who, rec.branch, 'release_added', releaseSummary(rec), newId);
+        return db.get('releases', newId);
       }
       case 'updateRelease': {
         var existing = db.get('releases', +req.id);
@@ -430,6 +474,8 @@ var Arpeggio = (function () {
         addRef(db, 'dealer', upd.branch);
         upd.updated_at = env.nowIso(); upd.updated_by = who;
         db.update('releases', existing.id, upd);
+        var diff = releaseDiff(existing, upd);
+        if (diff) logActivity(env, db, who, upd.branch, 'release_edited', diff, existing.id);
         return db.get('releases', existing.id);
       }
       case 'deleteRelease': {
@@ -437,6 +483,7 @@ var Arpeggio = (function () {
         if (!row) bad('Not found', 404);
         canTouch(row);
         db.remove('releases', [row.id]);
+        logActivity(env, db, who, row.branch, 'release_deleted', releaseSummary(row) + (row.cs_number ? ' · CS ' + row.cs_number : ''), row.id);
         return { ok: true };
       }
       case 'importReleases': {
@@ -448,7 +495,7 @@ var Arpeggio = (function () {
           try {
             var r = {};
             FIELDS.forEach(function (k) { r[k] = raw[k]; });
-            if (!str(r.branch)) r.branch = req.branch || '';
+            if (!str(r.branch)) r.branch = force !== null ? force : (req.branch || '');
             if (force !== null) {
               if (key(r.branch) !== key(force)) bad('belongs to "' + r.branch + '"; you can only import ' + force + ' rows');
               r.branch = force;
@@ -463,6 +510,10 @@ var Arpeggio = (function () {
         });
         added.forEach(function (c) { addRef(db, 'dealer', c.branch); });
         var newIds = db.insertMany('releases', added);
+        if (added.length || errors.length) {
+          logActivity(env, db, who, force !== null ? force : str(req.branch), 'import',
+            added.length + ' added' + (errors.length ? ', ' + errors.length + ' skipped' : ''));
+        }
         return { added: added.length, errors: errors.slice(0, 20), error_count: errors.length,
           rows: newIds.map(function (id) { return db.get('releases', id); }) };
       }
@@ -478,7 +529,10 @@ var Arpeggio = (function () {
         if (req.kind === 'grm' && !str(req.parent)) bad('Pick the dealer this GRM works for');
         var cat = str(req.category) || (req.kind === 'status' ? 'open' : '');
         var n = 0;
-        names.forEach(function (nm) { if (addRef(db, req.kind, nm, req.parent, cat)) n++; });
+        var addedNames = [];
+        names.forEach(function (nm) { if (addRef(db, req.kind, nm, req.parent, cat)) { n++; addedNames.push(nm.trim()); } });
+        if (n) logActivity(env, db, who, '', 'list_added', REF_KINDS[req.kind].label + ': ' + addedNames.join(', ')
+          + (str(req.parent) ? ' (' + str(req.parent) + ')' : ''));
         var p = refsPayload(db); p.added = n; p.skipped = names.length - n;
         return p;
       }
@@ -493,6 +547,11 @@ var Arpeggio = (function () {
         if (ref.kind === 'status' && STATUS_CATEGORIES.indexOf(category) < 0) bad('Status category must be open, sold or cancelled');
         if (db.all('refs').some(function (r) { return r.kind === ref.kind && r.id !== ref.id && key(r.name) === key(name); })) bad('"' + name + '" already exists');
         db.update('refs', ref.id, { name: name, parent: parent, category: category });
+        var refNotes = [];
+        if (name !== ref.name) refNotes.push('"' + ref.name + '" renamed to "' + name + '"');
+        if (parent !== str(ref.parent)) refNotes.push(name + ' moved from ' + show(ref.parent) + ' to ' + show(parent));
+        if (category !== str(ref.category)) refNotes.push(name + ' category ' + show(ref.category) + ' → ' + show(category));
+        if (refNotes.length) logActivity(env, db, who, '', 'list_changed', REF_KINDS[ref.kind].label + ': ' + refNotes.join('; '));
         if (name !== ref.name) { // renames flow through so stats stay together
           var field = REF_KINDS[ref.kind].field, old = ref.name;
           db.updateWhere('releases', function (r) { return r[field] === old; }, function () { var o = {}; o[field] = name; return o; });
@@ -512,6 +571,8 @@ var Arpeggio = (function () {
           var childKind = { variant: 'unit', dealer: 'grm' }[target.kind];
           if (childKind) db.all('refs').forEach(function (r) { if (r.kind === childKind && r.parent === target.name) ids.push(r.id); });
           db.remove('refs', ids);
+          logActivity(env, db, who, '', 'list_removed', REF_KINDS[target.kind].label + ': ' + target.name
+            + (ids.length > 1 ? ' (and ' + (ids.length - 1) + ' linked ' + REF_KINDS[childKind].label + ')' : ''));
         }
         return refsPayload(db);
       }
@@ -527,6 +588,7 @@ var Arpeggio = (function () {
         found.sort(function (a, b) { return (a.parent + a.name).localeCompare(b.parent + b.name); });
         var added = 0;
         found.forEach(function (g) { if (addRef(db, 'grm', g.name, g.parent, '')) added++; });
+        if (added) logActivity(env, db, who, '', 'list_added', 'GRMs: ' + added + ' imported from existing releases');
         var pl = refsPayload(db); pl.added = added;
         return pl;
       }
@@ -544,7 +606,12 @@ var Arpeggio = (function () {
         var list = db.all('users').map(publicUser).sort(function (a, b) { return (a.role + a.username).localeCompare(b.role + b.username); });
         return { users: list, roles: ROLES, dealers: dealerList(db) };
       }
-      case 'createUser': requireRole('admin'); return publicUser(db.get('users', createUser(env, db, req.user || {})));
+      case 'createUser': {
+        requireRole('admin');
+        var nu = db.get('users', createUser(env, db, req.user || {}));
+        logActivity(env, db, who, nu.dealer, 'user_added', nu.username + ' (' + nu.role + (nu.dealer ? ', ' + nu.dealer : '') + ')');
+        return publicUser(nu);
+      }
       case 'updateUser': {
         requireRole('admin');
         var t = db.get('users', +req.id);
@@ -562,7 +629,24 @@ var Arpeggio = (function () {
           patch.password_hash = hashPassword(env, String(c2.password));
         }
         db.update('users', t.id, patch);
+        var uNotes = [];
+        if (patch.role !== t.role) uNotes.push('role ' + t.role + ' → ' + patch.role);
+        if (patch.dealer !== str(t.dealer)) uNotes.push('dealer ' + show(t.dealer) + ' → ' + show(patch.dealer));
+        if (patch.active !== (t.active ? 1 : 0)) uNotes.push(patch.active ? 'enabled' : 'disabled');
+        if (patch.name !== str(t.name)) uNotes.push('name ' + show(t.name) + ' → ' + show(patch.name));
+        if (patch.password_hash) uNotes.push('password reset');
+        if (uNotes.length) logActivity(env, db, who, patch.dealer || t.dealer, 'user_changed', t.username + ': ' + uNotes.join('; '));
         return publicUser(db.get('users', t.id));
+      }
+      case 'activity': {
+        requireRole('admin');
+        var aFrom = req.from ? parseDate(req.from) : '', aTo = req.to ? parseDate(req.to) : '';
+        var log = db.all('activity').filter(function (a) {
+          var day = str(a.at).slice(0, 10);
+          return (!aFrom || day >= aFrom) && (!aTo || day <= aTo);
+        });
+        log.sort(function (a, b) { return a.at < b.at ? 1 : a.at > b.at ? -1 : (b.id || 0) - (a.id || 0); });
+        return { rows: log.slice(0, 5000), total: log.length, users: db.all('users').map(publicUser), dealers: dealerList(db) };
       }
       case 'deleteUser': {
         requireRole('admin');
@@ -571,6 +655,7 @@ var Arpeggio = (function () {
         if (d.id === user.id) bad('You can\'t delete your own account');
         if (d.role === 'admin' && !activeAdmins(db, d.id)) bad('Keep at least one active admin');
         db.remove('users', [d.id]);
+        logActivity(env, db, who, d.dealer, 'user_deleted', d.username);
         return { ok: true };
       }
     }

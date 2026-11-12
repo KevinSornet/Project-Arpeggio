@@ -89,6 +89,11 @@ var DemoBackend = (function () {
     return ids;
   };
   MemoryDb.prototype.insert = function (t, rec) { return this.insertMany(t, [rec])[0]; };
+  MemoryDb.prototype.append = function (t, rec) { // same as the sheet's: keep the given id
+    this.rows(t).push(Object.assign({}, rec));
+    if (this.rows(t).length > 5000) this.s.tables[t] = this.rows(t).slice(-5000); // keep demo storage small
+    this.save();
+  };
   MemoryDb.prototype.update = function (t, id, patch) {
     var r = this.rows(t).filter(function (x) { return x.id === id; })[0];
     if (!r) throw new Error('Not found');

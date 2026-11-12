@@ -220,6 +220,24 @@ SheetDb_.prototype.insertMany = function (table, recs) {
 
 SheetDb_.prototype.insert = function (table, rec) { return this.insertMany(table, [rec])[0]; };
 
+/**
+ * Add one row at the bottom WITHOUT reading the whole tab first. Used for the Activity log,
+ * which only ever grows: reading it on every save would make saving slower and slower.
+ */
+SheetDb_.prototype.append = function (table, rec) {
+  var spec = Arpeggio.TABLES[table];
+  var sh = this.sheet(table);
+  var headers = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0]
+    .map(function (h) { return String(h).trim().toUpperCase(); });
+  var vals = headers.map(function () { return ''; });
+  spec.cols.forEach(function (c) {
+    var i = headers.indexOf(c[1].toUpperCase());
+    if (i >= 0) vals[i] = rec[c[0]] == null ? '' : String(rec[c[0]]);
+  });
+  sh.getRange(sh.getLastRow() + 1, 1, 1, vals.length).setNumberFormat('@').setValues([vals]);
+  this.cache[table] = null; // if this request reads the log later, read it fresh
+};
+
 SheetDb_.prototype.findRow_ = function (t, rec) {
   // the row may have moved if someone sorted/inserted rows in the sheet since we read it
   var idCol = t.pos.id + 1;

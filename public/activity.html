@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Activity · SVC Sales Tracker</title>
+  <link rel="stylesheet" href="styles.css">
+  <link rel="icon" type="image/png" href="favicon.png">
+  <link rel="apple-touch-icon" href="apple-touch-icon.png">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="index.html" style="text-decoration:none;color:inherit" aria-label="SVC Sales Tracker home"><img src="svc-logo.png" alt="SVC" class="brand-logo"><span class="brand-name">Sales Tracker</span></a>
+    <nav class="nav" data-page="activity"></nav>
+    <div class="spacer"></div>
+  </header>
+
+  <main>
+    <div class="card-head" style="margin-bottom:16px">
+      <div>
+        <h1>Activity</h1>
+        <div class="muted">Sign-ins and every change made in the app, newest first. Also kept in the Activity tab of your Google Sheet.</div>
+      </div>
+      <button id="exportBtn">Export CSV</button>
+    </div>
+
+    <div class="toolbar">
+      <div class="seg" id="presets">
+        <button data-p="1">Today</button>
+        <button data-p="7">Last 7 days</button>
+        <button data-p="30">Last 30 days</button>
+        <button data-p="90">Last 90 days</button>
+      </div>
+      <label>From <input type="date" id="from"></label>
+      <label>To <input type="date" id="to"></label>
+      <label>Person <select id="person"><option value="">Everyone</option></select></label>
+      <label>Dealer <select id="dealer"><option value="">All dealers</option></select></label>
+      <label>What <select id="kind"><option value="">Everything</option></select></label>
+      <label style="flex:1;min-width:160px">Search <input id="search" placeholder="Client, CS number, release ID…"></label>
+    </div>
+
+    <h2 style="margin:4px 0 10px">Last seen</h2>
+    <div class="table-wrap" style="margin-bottom:20px;max-height:280px">
+      <table>
+        <thead><tr><th>Person</th><th>Role</th><th>Dealer</th><th>Last sign-in</th><th>Last active</th><th class="num">Changes in range</th></tr></thead>
+        <tbody id="people"></tbody>
+      </table>
+    </div>
+
+    <div class="card-head" style="margin:0 0 10px"><h2>Events</h2><span class="sub" id="count"></span></div>
+    <div class="table-wrap" style="max-height:calc(100vh - 220px)">
+      <table>
+        <thead><tr><th>When</th><th>Person</th><th>Dealer</th><th>What</th><th>Release</th><th>Details</th></tr></thead>
+        <tbody id="events"></tbody>
+      </table>
+    </div>
+  </main>
+
+  <script src="config.js"></script>
+  <script src="common.js"></script>
+  <script src="activity.js"></script>
+</body>
+</html>

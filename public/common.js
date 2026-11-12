@@ -82,6 +82,7 @@ const PAGES = [
   { key: 'dashboard', href: 'dashboard.html', label: 'Dashboard' },
   { key: 'references', href: 'references.html', label: 'Data references', admin: true },
   { key: 'users', href: 'users.html', label: 'Users', admin: true },
+  { key: 'activity', href: 'activity.html', label: 'Activity', admin: true },
 ];
 const ROLE_LABEL = { admin: 'Admin', manager: 'Manager', dealer: 'Dealer staff' };
 let me = null;
