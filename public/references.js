@@ -6,7 +6,7 @@ const HELP = {
   unit: 'Specific units, each linked to a variant. The Sales form only offers units of the chosen variant.',
   color: 'Paint colors offered on the Sales form.',
   transaction: 'Payment types. "Needs bank" ones ask for a bank and count as financed on the dashboard.',
-  status: 'Release statuses, in pipeline order. Category drives the dashboard: Open = still in pipeline, Sold = counted as a sale, Cancelled = lost deal.',
+  status: 'Release statuses, in pipeline order. Category drives the dashboard: Open = still in pipeline, Sold = counted as a sale, Cancelled = lost deal. Colors run from red (Cancelled) through the open stages, in this order, to green (Sold).',
   bank: 'Banks offered for financing and bank PO deals.',
 };
 const CAT_OPTIONS = {
@@ -64,6 +64,7 @@ function render() {
   if (CAT_OPTIONS[kind]) $('#addForm').category.innerHTML = opts(CAT_OPTIONS[kind]);
 
   const list = items();
+  const stc = kind === 'status' ? statusColors(data.refs.status) : null;
   $('#thead').innerHTML = `<tr><th style="width:56px">Order</th><th>Name</th>
     ${P ? `<th>${P.label}</th>` : ''}${CAT_OPTIONS[kind] ? '<th>Category</th>' : ''}
     <th class="num">Used in releases</th><th></th></tr>`;
@@ -72,7 +73,7 @@ function render() {
       <td class="nowrap">
         <button type="button" class="icon move" data-dir="-1" ${i === 0 ? 'disabled' : ''} title="Move up">↑</button><button type="button" class="icon move" data-dir="1" ${i === list.length - 1 ? 'disabled' : ''} title="Move down">↓</button>
       </td>
-      <td><input class="ref-name" value="${esc(it.name)}" data-orig="${esc(it.name)}" aria-label="Name"></td>
+      <td class="${stc ? 'name-cell' : ''}">${stc ? `<span class="dot" style="background:${stc[it.name]}" title="Color used for this status"></span>` : ''}<input class="ref-name" value="${esc(it.name)}" data-orig="${esc(it.name)}" aria-label="Name"></td>
       ${P ? `<td><select class="ref-parent" aria-label="${P.label}">${opts(parents.some(([v]) => v === it.parent) ? parents : [[it.parent, it.parent || '—'], ...parents], it.parent)}</select></td>` : ''}
       ${CAT_OPTIONS[kind] ? `<td><select class="ref-cat" aria-label="Category">${opts(CAT_OPTIONS[kind], it.category || (kind === 'status' ? 'open' : ''))}</select></td>` : ''}
       <td class="num">${it.usage}</td>

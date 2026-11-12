@@ -33,6 +33,8 @@ const COLS = [
 
 const opt = (v, label = v, sel = false) => `<option value="${esc(v)}" ${sel ? 'selected' : ''}>${esc(label)}</option>`;
 const catOf = s => (meta.statuses.find(x => x.name === s)?.category) || 'open';
+let stColors = {};
+const colorOf = s => statusColor(stColors, s, catOf(s));
 const needsBank = t => meta.transactions.find(x => x.name === t)?.category === 'bank';
 const cellText = (c, r) => (c.fmt ? c.fmt(r) : r[c.key]) || '';
 
@@ -41,6 +43,7 @@ function applyMeta(m) {
   if (dlg.open && meta) { pendingMeta = m; return; }
   pendingMeta = null;
   meta = m;
+  stColors = statusColors(meta.statuses);
   const saved = branchSel.value || store.get('arpeggio.branch', '');
   branchSel.innerHTML = meta.branches.map(b => opt(b)).join('');
   if (meta.branches.includes(saved)) branchSel.value = saved;
@@ -143,7 +146,7 @@ function render() {
   const filtered = shown.length !== rows.length ? ` of ${rows.length}` : '';
   $('#chips').innerHTML = `<span class="chip">Showing <b>${shown.length}</b>${filtered}</span>` +
     meta.statuses.filter(s => counts[s.name]).map(s =>
-      `<span class="chip"><span class="dot ${s.category}"></span>${esc(s.name)} <b>${counts[s.name]}</b></span>`).join('');
+      `<span class="chip"><span class="dot" style="background:${colorOf(s.name)}"></span>${esc(s.name)} <b>${counts[s.name]}</b></span>`).join('');
 
 
   if (!shown.length) {
@@ -151,9 +154,9 @@ function render() {
     return;
   }
   $('#rows').innerHTML = shown.map(r => `
-    <tr class="st-${catOf(r.status)}" data-id="${r.id}">
+    <tr class="st" style="--st:${colorOf(r.status)}" data-id="${r.id}">
       ${COLS.map(c => c.key === 'status'
-        ? `<td><span class="dot ${catOf(r.status)}"></span>
+        ? `<td><span class="dot" style="background:${colorOf(r.status)}"></span>
             <select class="status-select" aria-label="Status">${meta.statuses.map(s => opt(s.name, s.name, s.name === r.status)).join('')}
             ${meta.statuses.some(s => s.name === r.status) ? '' : opt(r.status, r.status, true)}</select></td>`
         : `<td class="${c.cls || ''}" title="${esc(cellText(c, r))}">${esc(cellText(c, r))}</td>`).join('')}

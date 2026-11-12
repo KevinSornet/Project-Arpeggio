@@ -139,15 +139,14 @@ function render(s) {
   barChart('cBank', s.by_bank, { horizontal: true });
 
   // one stacked segment per open status, in pipeline order; colors follow the status, not its rank
-  const seriesColors = [c.s1, c.s2, c.s3, c.s4, '#e87ba4', '#008300', '#6250d6', '#e34948'];
-  const allOpen = (s.weekly_pipeline[0] && Object.keys(s.weekly_pipeline[0].counts)) || [];
+  const stc = statusColors(meta.statuses); // same red → green scale as the Sales table
   draw('cWeekly', {
     type: 'bar',
     data: {
       labels: s.weekly_pipeline.map(w => fmtDate(w.week, { month: 'short', day: 'numeric' })),
       datasets: s.weekly_statuses.map(name => ({
         label: name, data: s.weekly_pipeline.map(w => w.counts[name] || 0),
-        backgroundColor: seriesColors[allOpen.indexOf(name) % seriesColors.length],
+        backgroundColor: statusColor(stc, name, 'open'),
         borderColor: c.surface, borderWidth: { top: 2 }, borderSkipped: 'start', maxBarThickness: 28,
       })),
     },
@@ -181,7 +180,7 @@ function render(s) {
     <tbody>${s.upcoming.map(r => `<tr><td class="num">${fmtDate(r.target_date, { month: 'short', day: 'numeric' })}</td>
       <td><b>${esc(r.branch)}</b></td><td>${esc(r.variant)}</td><td class="ink2">${esc(r.unit)}</td><td class="ink2">${esc(r.color)}</td>
       <td>${esc(r.transaction_type)}</td><td>${esc(r.bank)}</td><td class="client">${esc(r.client)}</td><td class="ink2">${esc(r.grm)}</td>
-      <td><span class="pill"><span class="dot ${r.cat}"></span>${esc(r.status)}</span></td></tr>`).join('')
+      <td><span class="pill"><span class="dot" style="background:${statusColor(stc, r.status, r.cat)}"></span>${esc(r.status)}</span></td></tr>`).join('')
       || '<tr><td class="empty" colspan="10">Nothing scheduled in the next 14 days</td></tr>'}</tbody>`;
 
   $('#updated').textContent = `Updated ${new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`;

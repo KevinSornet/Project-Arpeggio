@@ -130,16 +130,15 @@ th { position: sticky; top: 0; background: var(--surface-2); font-size: 11px; te
 tbody tr:last-child td { border-bottom: 0; }
 .card table th { background: transparent; position: static; }
 .card td, .card th { padding: 6px 8px; }
-tr.st-sold { background: var(--row-sold); }
-tr.st-cancelled { background: var(--row-cancelled); }
-tr.st-open { background: var(--row-pending); }
+/* status tint: --st is set per row from the red → green status scale */
+tr.st { background: color-mix(in srgb, var(--st) 13%, var(--surface)); }
 td.client { max-width: 220px; overflow: hidden; text-overflow: ellipsis; }
 
 .pill { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; padding: 2px 8px; border-radius: 999px; background: var(--surface-2); color: var(--ink); }
 .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; flex: none; }
-.dot.sold { background: var(--good); }
-.dot.cancelled { background: var(--critical); }
-.dot.open { background: var(--warning); }
+.dot { background: var(--muted); }
+.name-cell { display: flex; align-items: center; gap: 8px; }
+.name-cell .dot { width: 12px; height: 12px; box-shadow: 0 0 0 2px var(--surface), 0 0 0 3px var(--border); }
 select.status-select { padding: 3px 6px; font-size: 12px; font-weight: 600; background: transparent; }
 
 .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
