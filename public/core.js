@@ -250,7 +250,11 @@ var Arpeggio = (function () {
       at: env.nowIso(), username: who || '', dealer: dealer || '', action: action,
       release_id: releaseId == null ? '' : String(releaseId), details: String(details || '').slice(0, 500),
     };
-    try { if (db.append) db.append('activity', rec); else db.insert('activity', rec); } catch (e) { /* ignore */ }
+    try { if (db.append) db.append('activity', rec); else db.insert('activity', rec); }
+    catch (e) {
+      // never block the real work, but leave a trace (Apps Script: Executions → this run's log)
+      if (typeof console !== 'undefined' && console.error) console.error('Activity log could not be written: ' + (e && e.message ? e.message : e));
+    }
   }
 
   function isoMs(iso) { return iso ? Date.parse(String(iso).replace(' ', 'T') + 'Z') : 0; } // same-zone compare
